@@ -28,6 +28,20 @@
 
 ---
 
+## 效果展示
+
+以下示例均来自真实生成案例《星光救援队》（横款 12 寸 · 20 面 · 一家四口多人同框），均为 AI 绘制插画效果：
+
+### HTML 电子绘本排版效果
+
+![HTML 电子绘本排版效果](docs/images/demo_html_preview.jpg)
+
+### 多级基准图复用与跨页一致性
+
+![多级基准图与跨页一致性效果](docs/images/demo_consistency.jpg)
+
+---
+
 ## 目录结构
 
 ```text
@@ -35,6 +49,10 @@ workbuddy-skill-picture-book/
 ├── SKILL.md                           # 技能核心规范：工作流、故事圣经、一致性规则与自检闭环（v1.0.0）
 ├── assets/
 │   └── picture_book_template.html     # 可浏览与打印的 HTML 电子绘本模板（含 @media print 与 @page 样式）
+├── docs/
+│   └── images/                        # README 效果展示图片
+│       ├── demo_html_preview.jpg
+│       └── demo_consistency.jpg
 ├── references/
 │   └── story_prompts.md               # 故事圣经模板、分页脚本模板、风格提示词、核验清单与规格对照表
 ├── scripts/

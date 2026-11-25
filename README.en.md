@@ -28,6 +28,20 @@ Turn an uploaded portrait or group photo into the protagonist(s) of an original 
 
 ---
 
+## Showcase
+
+Examples below are generated from a real 20-page family storybook (*Starlight Rescue Team*, Landscape 12", multi-character family cast) — all visuals are AI-painted illustrations:
+
+### HTML E-Book Layout Preview
+
+![HTML E-Book Layout Preview](docs/images/demo_html_preview.jpg)
+
+### Reference Sheet Reuse & Cross-Page Consistency
+
+![Reference Sheet Reuse and Cross-Page Consistency](docs/images/demo_consistency.jpg)
+
+---
+
 ## Repository Structure
 
 ```text
@@ -35,6 +49,10 @@ workbuddy-skill-picture-book/
 ├── SKILL.md                           # Core skill specification: workflow, Story Bible, consistency rules & checklists (v1.0.0)
 ├── assets/
 │   └── picture_book_template.html     # Browsable & printable HTML picture book template (@media print & @page support)
+├── docs/
+│   └── images/                        # Showcase images for README
+│       ├── demo_html_preview.jpg
+│       └── demo_consistency.jpg
 ├── references/
 │   └── story_prompts.md               # Story Bible template, script template, style prompts, pre-layout checklist & specs
 ├── scripts/
