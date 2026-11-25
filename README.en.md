@@ -46,7 +46,7 @@ Examples below are generated from a real 20-page family storybook (*Starlight Re
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.1.0): 4-step workflow & CLI triggers
+├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.2.0): 4-step workflow & CLI triggers
 ├── assets/
 │   └── picture_book_template.html     # Interactive HTML e-book template (single-page flip, double spread, scroll & print)
 ├── docs/
@@ -99,17 +99,14 @@ workbuddy-skill-picture-book/
 
 The skill follows a strict four-step closed loop:
 
-1. **Gather Creative Requirements**
-   - Confirm the **illustration style, book size, page count, and story theme/source** (AI-written or expanded from a user outline) alongside the uploaded reference photo(s).
-2. **Write the Story Bible & Page-by-Page Script**
-   - Analyze the photo(s) to extract fixed appearance anchors and build the Story Bible (character sheets, visual anchors, scene list, prop-holding timeline, and state continuity).
-   - Draft the full paginated script (scene anchor, English image prompt, prop-holding state, 1–3 concise Chinese story sentences of 30–60 chars, and state changes) and **wait for explicit user confirmation before generating any images**.
-3. **Generate Reference Sheets & Page Illustrations**
-   - Create cartoonized character reference sheets (plus an all-character group sheet when ≥2 human characters exist) and clean reference sheets for core props/vehicles, animal sidekicks, fixed centerpiece objects, and recurring plot props.
-   - Generate each page by reusing exact anchors (`style prefix + character anchors + prop/sidekick anchors + scene anchor + action & spatial relationships`) and reference images, **inspecting batches immediately during generation to catch missing characters, misalignments, or style drift**.
-4. **Automated Validation & Dual-Format Export**
-   - Write `book.json` and run `scripts/build_book.py --check-only` to validate page counts and verify every referenced image file on disk.
-   - Build both the **interactive HTML e-book** (single-page flip, double-page spread, scroll view, top-aligned cover title) and the **full-text print-ready PDF** in one command.
+1. **Photo Pre-Check & Creative Requirements**
+   - Evaluate uploaded photos for clarity, angle, and headcount (1–4 characters work best) before confirming **illustration style, book size, page count, and story theme/source** (favoring high-tolerance styles and single-day themes by default).
+2. **Write the Story Bible & Page-by-Page Script (Checkpoint 1)**
+   - Build the Story Bible (character anchors, relative height lock, scene list, prop/state timeline) and paginated script with mandatory **caption-noun checklists & gaze/interaction directions**, then **wait for explicit user confirmation before generating images**.
+3. **Approve Reference Sheets + 2 Sample Pages, Then Batch Generate (Checkpoint 2)**
+   - Generate standing full-body character reference sheets, element reference sheets, and **cover + 1 representative body page** for user sign-off on likeness, proportions, and natural posing before batch-generating the remaining pages with 5-question fact-answer QA every 1–3 pages.
+4. **Automated Validation, Dual Export & Single-Page Revisions**
+   - Write `book.json`, validate with `scripts/build_book.py --check-only`, and export both the interactive HTML e-book and full-text printable PDF (with optional `--crop-watermark` & `--bleed`). Supports targeted single-page redraws and one-command repackaging.
 
 ---
 
@@ -168,5 +165,5 @@ When iterating on or extending this skill, follow the **"Separate Rules from Sto
 ## Privacy & License
 
 - **Privacy & Portraits**: User-uploaded personal photos must be used strictly for creating the requested picture book and never shared externally.
-- **Author**: Steven的能量场 (Skill `v2.1.0`)
+- **Author**: Steven的能量场 (Skill `v2.2.0`)
 - **License**: Licensed under the [Apache License 2.0](LICENSE).
