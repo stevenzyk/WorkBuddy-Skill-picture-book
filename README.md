@@ -46,17 +46,20 @@
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # 技能核心规范：工作流、故事圣经、一致性规则与自检闭环（v1.0.0）
+├── SKILL.md                           # 技能核心入口（WorkBuddy 规范，v2.0.0）：四步工作流与脚本调用
 ├── assets/
-│   └── picture_book_template.html     # 可浏览与打印的 HTML 电子绘本模板（含 @media print 与 @page 样式）
+│   └── picture_book_template.html     # 可单页翻页 / 双页对开 / 滚动阅读与打印的 HTML 电子绘本模板
 ├── docs/
 │   └── images/                        # README 效果展示图片
 │       ├── demo_html_preview.jpg
 │       └── demo_consistency.jpg
 ├── references/
-│   └── story_prompts.md               # 故事圣经模板、分页脚本模板、风格提示词、核验清单与规格对照表
+│   ├── story_prompts.md               # 故事圣经模板、分页脚本模板、book.json 规范、风格前缀与规格对照表
+│   ├── consistency_rules.md           # 跨页一致性与防漂移规范（正面写全白名单、多角色、四类基准图等）
+│   └── qa_checklist.md                # 边生成边核验与排版前全书总检清单
 ├── scripts/
-│   └── build_pdf.py                   # 基于 Pillow 的打印级 PDF 合成脚本
+│   ├── build_book.py                  # 一键校验 book.json 并生成可翻页 HTML + 图文 PDF
+│   └── build_pdf.py                   # 基于 Pillow 的打印级图文 PDF 合成脚本（兼容纯图片目录模式）
 ├── LICENSE                            # Apache License 2.0 开源协议
 ├── README.md                          # 中文说明文档
 └── README.en.md                       # 英文说明文档
@@ -75,20 +78,20 @@ workbuddy-skill-picture-book/
 | **写实插画风** | 自然柔和光影、丰富纹理细节、人物外貌还原度更高 |
 | **唯美绘本风** | 柔美光影与细腻笔触、情感氛围柔和治愈 |
 
-### 2. 绘本尺寸
+### 2. 绘本尺寸与生图画幅
 
-| 尺寸名称 | 实际印刷尺寸 | HTML `@page` / PDF 参数 |
-|---------|-------------|--------------------------|
-| **方款 8 寸**（默认） | 约 203mm × 203mm | `203 203` |
-| **方款 10 寸** | 约 254mm × 254mm | `254 254` |
-| **横款 12 寸** | 约 305mm × 229mm | `305 229` |
-| **竖款 12 寸** | 约 229mm × 305mm | `229 305` |
+| 尺寸名称 | `size` 参数 | 实际印刷尺寸 | 推荐生图画幅 |
+|---------|-------------|-------------|-------------|
+| **方款 8 寸**（默认） | `square8` | 约 203mm × 203mm | `1:1` |
+| **方款 10 寸** | `square10` | 约 254mm × 254mm | `1:1` |
+| **横款 12 寸** | `landscape12` | 约 305mm × 229mm | `4:3` 或 `3:2` |
+| **竖款 12 寸** | `portrait12` | 约 229mm × 305mm | `3:4` 或 `2:3` |
 
 ### 3. 页数（面数）
 
 - **可选值**：`8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 28 / 32 / 36 / 40 / 44 / 48 / 52 / 56 / 60 / 64 / 68 / 72` 面（默认 **12 面**）。
 - **页数计算**：总面数 = 封面（1 面）+ 正文（`总面数 - 2` 面）+ 封底（1 面）。
-- **文件命名**：封面为 `page_01_cover.png`，正文依次为 `page_02.png`、`page_03.png` ……（封底可使用纯色/文案模板页或独立插画）。
+- **文件命名**：封面为 `page_01_cover.png`，正文依次为 `page_02.png`、`page_03.png` ……（封底可使用纯色渐变模板或独立插画）。
 
 ---
 
@@ -104,9 +107,9 @@ workbuddy-skill-picture-book/
 3. **生成基准图与各页插画**
    - 先生成主角卡通化基准图（多人类角色时先合成全员基准图），以及核心道具/载体、动物配角、固定物体、贯穿道具的干净特写基准图。
    - 按「风格前缀 + 人物锚点 + 道具/配角锚点 + 场景锚点 + 画面动作描述」逐页复用视觉锚点与参考图生图，**边生成边通过视觉检查拦截漏人、错位与风格漂移**。
-4. **排版与导出交付**
-   - 核对所有图片数量、页码映射与磁盘文件完整性后，组装 `HTML` 电子绘本（封面标题置于顶部留白区避免遮挡人物）。
-   - 调用 `scripts/build_pdf.py` 生成指定印刷尺寸的 `PDF` 文件交付打印。
+4. **自动化校验与双格式交付**
+   - 生成 `book.json`，运行 `scripts/build_book.py --check-only` 硬校验面数与磁盘图片完整性。
+   - 一键输出支持**单页翻页 / 双页对开 / 滚动浏览**的 HTML 电子绘本与**含完整封面标题、正文文案、页码与封底寄语**的打印级 PDF。
 
 ---
 
@@ -118,55 +121,52 @@ workbuddy-skill-picture-book/
    ```bash
    git clone https://github.com/stevenzyk/workbuddy-skill-picture-book.git ~/.workbuddy/skills/fairy-tale-picture-book
    ```
-   > 也可以将仓库目录打包为 `.zip`（或使用已打包的 `fairy-tale-picture-book.zip`），在 WorkBuddy 客户端「技能 > 添加技能 > 上传」中直接导入。
+   > 也可以将技能文件打包为 `.zip`（顶层目录为 `fairy-tale-picture-book/`），在 WorkBuddy 客户端或开放平台直接上传导入。
 
 2. **在对话中触发**：
    上传一张清晰正面的人物照片，并说明需求，例如：
    - 「把这张宝宝照片做成一本方款 8 寸、12 面的森林冒险童话绘本，温馨水彩风。」
-   - 「用这张全家福定制一本可以打印的亲子绘本。」
+   - 「用这张全家福定制一本横款 12 寸、20 面的可打印亲子绘本。」
 
-### 单独运行 PDF 合成脚本
-
-`scripts/build_pdf.py` 用于将绘本页面图片（按文件名排序）等比缩放居中铺入白底 PDF，默认 150 dpi（20 页约 7 MB），避免依赖 Playwright/Chromium headless 导出在部分环境下静默失败或文件过大的问题。
+### 单独运行构建与 PDF 脚本
 
 **前置依赖**：
 ```bash
 pip install Pillow
 ```
 
-**命令行用法**：
+**推荐：通过 `book.json` 一键校验并生成 HTML + 图文 PDF**：
 ```bash
-python scripts/build_pdf.py <图片目录> <输出pdf路径> [页面宽mm] [页面高mm] [dpi]
+# 1. 仅校验面数与图片完整性
+python scripts/build_book.py --book ./book/book.json --check-only
+
+# 2. 一键生成可翻页 HTML 与打印级完整图文 PDF（可选 --bleed 3 添加 3mm 实体印刷出血位）
+python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --bleed 3
 ```
 
-**常用示例**：
+**兼容模式：直接把纯插画目录合成为 PDF（自动排除 `ref_*` 参考图）**：
 ```bash
 # 方款 8 寸 (203mm × 203mm, 150dpi)
-python scripts/build_pdf.py ./book ./book_8inch.pdf 203 203
+python scripts/build_pdf.py ./book ./book_8inch.pdf --size square8
 
-# 横款 12 寸 (305mm × 229mm, 150dpi)
-python scripts/build_pdf.py ./book ./book_12inch_landscape.pdf 305 229
-
-# 更高打印清晰度 (200dpi)
-python scripts/build_pdf.py ./book ./book_hq.pdf 254 254 200
+# 横款 12 寸 (305mm × 229mm, 150dpi) 并自动追加渐变封底
+python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --blank-back
 ```
-
-> 说明：脚本会自动收集目录下的 `*.png`、`*.jpg`、`*.jpeg` 并按文件名排序；如未提供宽高参数，默认尺寸为 `200mm × 200mm`、`dpi=150`。使用 HTML 模板（`assets/picture_book_template.html`）打印时，也请同步修改 `@page { size: ... }` 为对应尺寸。
 
 ---
 
 ## 维护与二次开发规范
 
-若需对本技能规则进行迭代优化，请遵循 `SKILL.md` 中规定的**「规则与故事分离」**原则：
+若需对本技能规则进行迭代优化，请遵循 `SKILL.md` 中规定的**「规则与故事分离」**与**「渐进式披露」**原则：
 
-- **规则回答「怎么做」，示例回答「某个具体故事的 X 是什么」**。
-- **`SKILL.md`**：只存放可迁移的通用规则（使用 `<道具>`、`<角色>` 等占位符与原则句），避免把某个具体故事的设定写死成全局规则。
-- **`references/story_prompts.md`**：存放完整的故事圣经模板、提示词示范与逐条核验清单。
+- **`SKILL.md`**：只保留精炼的四步工作流与脚本调用入口，避免冗余堆砌占用上下文。
+- **`references/consistency_rules.md`**：维护跨页一致性通用规则（使用 `<道具>`、`<角色>` 等占位符与原则句）。
+- **`references/story_prompts.md` & `references/qa_checklist.md`**：维护故事圣经模板、提示词范例与分阶段核验清单。
 
 ---
 
 ## 隐私与协议
 
 - **肖像与隐私**：用户上传的人物照片仅用于当前绘本创作流程，严禁擅自外传或挪作他用。
-- **作者**：Steven的能量场（Skill 版本 `v1.0.0`）
+- **作者**：Steven的能量场（Skill 版本 `v2.0.0`）
 - **开源协议**：本项目基于 [Apache License 2.0](LICENSE) 开源。

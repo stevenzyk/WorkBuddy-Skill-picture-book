@@ -46,17 +46,20 @@ Examples below are generated from a real 20-page family storybook (*Starlight Re
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # Core skill specification: workflow, Story Bible, consistency rules & checklists (v1.0.0)
+├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.0.0): 4-step workflow & CLI triggers
 ├── assets/
-│   └── picture_book_template.html     # Browsable & printable HTML picture book template (@media print & @page support)
+│   └── picture_book_template.html     # Interactive HTML e-book template (single-page flip, double spread, scroll & print)
 ├── docs/
 │   └── images/                        # Showcase images for README
 │       ├── demo_html_preview.jpg
 │       └── demo_consistency.jpg
 ├── references/
-│   └── story_prompts.md               # Story Bible template, script template, style prompts, pre-layout checklist & specs
+│   ├── story_prompts.md               # Story Bible template, script template, book.json schema, style prefixes & specs
+│   ├── consistency_rules.md           # Cross-page consistency & anti-drift rules (whitelist, multi-char, 4 ref types)
+│   └── qa_checklist.md                # During-generation & pre-layout QA checklists
 ├── scripts/
-│   └── build_pdf.py                   # Pillow-based print-ready PDF builder script
+│   ├── build_book.py                  # One-command book.json validator + HTML & printable PDF builder
+│   └── build_pdf.py                   # Pillow-based full-text printable PDF builder (backwards-compatible dir mode)
 ├── LICENSE                            # Apache License 2.0
 ├── README.md                          # Chinese README
 └── README.en.md                       # English README
@@ -75,20 +78,20 @@ workbuddy-skill-picture-book/
 | **Realistic Illustration** | Soft natural lighting, rich textures, higher portrait likeness fidelity |
 | **Beautiful Storybook** | Delicate painterly strokes, soft dreamy lighting, warm emotional mood |
 
-### 2. Print Sizes
+### 2. Print Sizes & Recommended Aspect Ratios
 
-| Size Name | Print Dimensions | HTML `@page` / PDF Args |
-|-----------|-----------------|-------------------------|
-| **Square 8"** *(default)* | ~203mm × 203mm | `203 203` |
-| **Square 10"** | ~254mm × 254mm | `254 254` |
-| **Landscape 12"** | ~305mm × 229mm | `305 229` |
-| **Portrait 12"** | ~229mm × 305mm | `229 305` |
+| Size Name | `size` Arg | Print Dimensions | Recommended Generation Aspect Ratio |
+|-----------|------------|------------------|-------------------------------------|
+| **Square 8"** *(default)* | `square8` | ~203mm × 203mm | `1:1` |
+| **Square 10"** | `square10` | ~254mm × 254mm | `1:1` |
+| **Landscape 12"** | `landscape12` | ~305mm × 229mm | `4:3` or `3:2` |
+| **Portrait 12"** | `portrait12` | ~229mm × 305mm | `3:4` or `2:3` |
 
 ### 3. Page Counts (Sides)
 
 - **Supported values**: `8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 24 / 28 / 32 / 36 / 40 / 44 / 48 / 52 / 56 / 60 / 64 / 68 / 72` pages (default **12**).
 - **Page breakdown**: Total pages = Front Cover (`1`) + Story Body (`Total - 2`) + Back Cover (`1`).
-- **File naming**: `page_01_cover.png` for the front cover, followed by `page_02.png`, `page_03.png`, ... for body pages (the back cover can use the solid/gradient template block or a dedicated image).
+- **File naming**: `page_01_cover.png` for the front cover, followed by `page_02.png`, `page_03.png`, ... for body pages (the back cover can use the warm gradient template or a dedicated image).
 
 ---
 
@@ -104,9 +107,9 @@ The skill follows a strict four-step closed loop:
 3. **Generate Reference Sheets & Page Illustrations**
    - Create cartoonized character reference sheets (plus an all-character group sheet when ≥2 human characters exist) and clean reference sheets for core props/vehicles, animal sidekicks, fixed centerpiece objects, and recurring plot props.
    - Generate each page by reusing exact anchors (`style prefix + character anchors + prop/sidekick anchors + scene anchor + action & spatial relationships`) and reference images, **inspecting batches immediately during generation to catch missing characters, misalignments, or style drift**.
-4. **Layout & Export**
-   - Verify exact image counts, page-number mappings, and disk file presence, then assemble the HTML e-book (keeping the cover title in the top blank margin so it never overlaps faces).
-   - Run `scripts/build_pdf.py` with the matching dimensions to produce the printable PDF.
+4. **Automated Validation & Dual-Format Export**
+   - Write `book.json` and run `scripts/build_book.py --check-only` to validate page counts and verify every referenced image file on disk.
+   - Build both the **interactive HTML e-book** (single-page flip, double-page spread, scroll view, top-aligned cover title) and the **full-text print-ready PDF** in one command.
 
 ---
 
@@ -118,55 +121,52 @@ The skill follows a strict four-step closed loop:
    ```bash
    git clone https://github.com/stevenzyk/workbuddy-skill-picture-book.git ~/.workbuddy/skills/fairy-tale-picture-book
    ```
-   > Alternatively, package the skill directory as a `.zip` file (or import `fairy-tale-picture-book.zip`) via **Skills > Add Skill > Upload** in the WorkBuddy desktop app.
+   > Alternatively, package the skill files as a `.zip` archive (with top-level folder `fairy-tale-picture-book/`) and upload it via WorkBuddy desktop or the WorkBuddy Open Platform.
 
 2. **Trigger in conversation**:
    Upload a clear, well-lit front-facing portrait or family photo and describe your book request, for example:
    - *"Turn this photo of my child into an 8-inch square, 12-page forest adventure fairy tale picture book in soft watercolor style."*
-   - *"Create a printable family fairy tale picture book based on this family photo."*
+   - *"Create a printable 20-page landscape 12-inch family fairy tale picture book based on this family photo."*
 
-### Run the PDF Builder Script Standalone
-
-`scripts/build_pdf.py` sorts page images by filename, scales them proportionally onto a white canvas matching the target millimeter dimensions, and writes a print-ready PDF (default 150 dpi, ~7 MB for 20 pages). It replaces an earlier Playwright/Chromium headless workflow that could exit silently without writing output on some Windows environments.
+### Run the Builder & PDF Scripts Standalone
 
 **Prerequisite**:
 ```bash
 pip install Pillow
 ```
 
-**CLI Usage**:
+**Recommended: Validate and build HTML + full-text printable PDF from `book.json`**:
 ```bash
-python scripts/build_pdf.py <image_dir> <output_pdf> [width_mm] [height_mm] [dpi]
+# 1. Validate page count & disk images only
+python scripts/build_book.py --book ./book/book.json --check-only
+
+# 2. Generate interactive HTML e-book + full-text printable PDF (optional --bleed 3 for 3mm print bleed)
+python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --bleed 3
 ```
 
-**Examples**:
+**Legacy Mode: Stitch an image directory directly into a PDF (automatically excludes `ref_*` sheets)**:
 ```bash
 # Square 8" (203mm × 203mm, 150dpi)
-python scripts/build_pdf.py ./book ./book_8inch.pdf 203 203
+python scripts/build_pdf.py ./book ./book_8inch.pdf --size square8
 
-# Landscape 12" (305mm × 229mm, 150dpi)
-python scripts/build_pdf.py ./book ./book_12inch_landscape.pdf 305 229
-
-# Higher print resolution (200dpi)
-python scripts/build_pdf.py ./book ./book_hq.pdf 254 254 200
+# Landscape 12" (305mm × 229mm, 150dpi) with auto warm-gradient back cover
+python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --blank-back
 ```
-
-> Note: The script collects `*.png`, `*.jpg`, and `*.jpeg` files sorted by filename (`page_01_cover.png`, `page_02.png`, ...). If width/height are omitted, it defaults to `200mm × 200mm` at `150` dpi. When printing directly from `assets/picture_book_template.html`, update `@page { size: ...; }` to match the selected book dimensions.
 
 ---
 
 ## Maintenance Guidelines
 
-When iterating on or extending this skill, follow the **"Separate Rules from Story Content"** principle documented in `SKILL.md`:
+When iterating on or extending this skill, follow the **"Separate Rules from Story Content"** and **Progressive Disclosure** principles:
 
-- **Rules explain *how* to do it; examples illustrate *what* a specific story uses.**
-- **`SKILL.md`**: Keep only reusable, generalizable rules (using placeholders like `<prop>` and `<character>`), avoiding story-specific nouns inside rule statements.
-- **`references/story_prompts.md`**: Store concrete Story Bible templates, example prompts, and pre-layout verification checklists.
+- **`SKILL.md`**: Keep lean and focused on the 4-step workflow and CLI commands to avoid context bloat.
+- **`references/consistency_rules.md`**: Maintain reusable cross-page consistency rules using placeholders (`<prop>`, `<character>`).
+- **`references/story_prompts.md` & `references/qa_checklist.md`**: Maintain templates, prompt examples, and phase-gated QA checklists.
 
 ---
 
 ## Privacy & License
 
 - **Privacy & Portraits**: User-uploaded personal photos must be used strictly for creating the requested picture book and never shared externally.
-- **Author**: Steven的能量场 (Skill `v1.0.0`)
+- **Author**: Steven的能量场 (Skill `v2.0.0`)
 - **License**: Licensed under the [Apache License 2.0](LICENSE).
