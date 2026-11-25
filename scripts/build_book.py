@@ -29,7 +29,7 @@ SKILL_ROOT = SCRIPT_DIR.parent
 TEMPLATE_PATH = SKILL_ROOT / "assets" / "picture_book_template.html"
 
 sys.path.insert(0, str(SCRIPT_DIR))
-from build_pdf import SIZE_PRESETS, EXCLUDE_PREFIXES, build_pdf_from_book  # noqa: E402
+from build_pdf import SIZE_PRESETS, EXCLUDE_PREFIXES, build_pdf_from_book, crop_watermark  # noqa: E402
 
 VALID_PAGE_COUNTS = {
     8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72
@@ -232,6 +232,33 @@ def _safe_filename(title: str) -> str:
     return cleaned or "picture_book"
 
 
+def _prepare_clean_book(data: Dict, src_dir: Path, out_dir: Path) -> Dict:
+    """将 book.json 引用的页面图片裁去右下角水印并输出到 out_dir/clean_images/，返回更新路径后的副本。"""
+    from PIL import Image
+    import copy
+
+    clean_dir = out_dir / "clean_images"
+    clean_dir.mkdir(parents=True, exist_ok=True)
+    cleaned = copy.deepcopy(data)
+
+    def crop_one(rel_path: str) -> str:
+        src = (src_dir / rel_path).resolve()
+        dst = clean_dir / src.name
+        im = crop_watermark(Image.open(src).convert("RGB"))
+        im.save(dst, "PNG", optimize=True)
+        return os.path.relpath(dst, out_dir).replace("\\", "/")
+
+    cleaned["cover"]["image"] = crop_one(data["cover"]["image"])
+    for page in cleaned["pages"]:
+        page["image"] = crop_one(page["image"])
+    back_img = ((cleaned.get("back") or {}).get("image") or "").strip()
+    if back_img:
+        cleaned["back"]["image"] = crop_one(back_img)
+
+    print(f"✅ 已同步裁去右下角水印（HTML 与 PDF 共用）：{clean_dir}")
+    return cleaned
+
+
 def main():
     parser = argparse.ArgumentParser(description="童话绘本一键校验与构建工具（HTML + 打印级 PDF）。")
     parser.add_argument("--book", required=True, help="book.json 路径")
@@ -239,6 +266,7 @@ def main():
     parser.add_argument("--name", help="输出文件名前缀（默认使用绘本标题）")
     parser.add_argument("--dpi", type=int, default=150, help="PDF 分辨率 DPI（默认 150）")
     parser.add_argument("--bleed", type=float, default=0.0, help="PDF 四边出血位 mm（默认 0）")
+    parser.add_argument("--crop-watermark", action="store_true", help="等比裁去右下角平台水印（HTML 与 PDF 同步生效）")
     parser.add_argument("--check-only", action="store_true", help="仅校验 book.json 与图片，不生成文件")
     parser.add_argument("--skip-pdf", action="store_true", help="仅生成 HTML，跳过 PDF 合成")
 
@@ -250,10 +278,17 @@ def main():
         return
 
     out_dir = Path(args.out_dir).resolve() if args.out_dir else book_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
     stem = _safe_filename(args.name or data["title"])
 
+    html_data = data
+    html_base_dir = book_path.parent
+    if args.crop_watermark:
+        html_data = _prepare_clean_book(data, book_path.parent, out_dir)
+        html_base_dir = out_dir
+
     html_path = out_dir / f"{stem}.html"
-    build_html(data, book_path.parent, html_path)
+    build_html(html_data, html_base_dir, html_path)
 
     if not args.skip_pdf:
         pdf_path = out_dir / f"{stem}.pdf"
@@ -262,6 +297,7 @@ def main():
             pdf_path=str(pdf_path),
             dpi=args.dpi,
             bleed_mm=args.bleed,
+            remove_watermark=args.crop_watermark,
         )
 
 

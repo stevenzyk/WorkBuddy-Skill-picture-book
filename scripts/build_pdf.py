@@ -84,6 +84,14 @@ def _natural_key(path: str):
     return [int(tok) if tok.isdigit() else tok for tok in re.split(r"(\d+)", name)]
 
 
+def crop_watermark(img, ratio: float = 0.065):
+    """等比裁去右下角平台水印区域（默认裁去右侧与底部各 6.5%，保持原图宽高比且不裁人物头部）。"""
+    src_w, src_h = img.size
+    new_w = max(1, int(round(src_w * (1.0 - ratio))))
+    new_h = max(1, int(round(src_h * (1.0 - ratio))))
+    return img.crop((0, 0, new_w, new_h))
+
+
 def _fit_cover(img, target_w: int, target_h: int):
     """等比放大并居中裁切铺满目标区域（类似 CSS object-fit: cover），无白边、不变形。"""
     Image, _, _ = _load_pil()
@@ -309,8 +317,9 @@ def build_pdf_from_book(
     height_mm: Optional[float] = None,
     dpi: int = 150,
     bleed_mm: float = 0.0,
+    remove_watermark: bool = False,
 ):
-    _load_pil()
+    Image, _, _ = _load_pil()
     book_file = Path(book_json_path).resolve()
     if not book_file.is_file():
         print(f"错误：找不到 book.json：{book_file}", file=sys.stderr)
@@ -325,37 +334,47 @@ def build_pdf_from_book(
     px_w = int(round(total_w_mm / 25.4 * dpi))
     px_h = int(round(total_h_mm / 25.4 * dpi))
 
-    rendered = []
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        def prep_img(src: Path) -> str:
+            if not remove_watermark:
+                return str(src)
+            im = crop_watermark(Image.open(src).convert("RGB"))
+            dst = Path(tmp_dir) / src.name
+            im.save(dst, "PNG")
+            return str(dst)
 
-    # 1. 封面
-    cover = data.get("cover", {})
-    cover_img = base_dir / cover.get("image", "")
-    if not cover_img.is_file():
-        print(f"错误：找不到封面图片：{cover_img}", file=sys.stderr)
-        sys.exit(1)
-    rendered.append(
-        _render_cover_page(
-            str(cover_img),
-            data.get("title", "我的童话故事"),
-            data.get("subtitle", ""),
-            px_w,
-            px_h,
-        )
-    )
+        rendered = []
 
-    # 2. 正文页
-    for idx, page in enumerate(data.get("pages", []), start=1):
-        img_file = base_dir / page.get("image", "")
-        if not img_file.is_file():
-            print(f"错误：找不到第 {idx} 页图片：{img_file}", file=sys.stderr)
+        # 1. 封面
+        cover = data.get("cover", {})
+        cover_img = base_dir / cover.get("image", "")
+        if not cover_img.is_file():
+            print(f"错误：找不到封面图片：{cover_img}", file=sys.stderr)
             sys.exit(1)
-        rendered.append(_render_body_page(str(img_file), page.get("text", ""), idx, px_w, px_h))
+        rendered.append(
+            _render_cover_page(
+                prep_img(cover_img),
+                data.get("title", "我的童话故事"),
+                data.get("subtitle", ""),
+                px_w,
+                px_h,
+            )
+        )
 
-    # 3. 封底
-    back = data.get("back", {})
-    back_img_rel = back.get("image", "").strip()
-    back_img_path = str(base_dir / back_img_rel) if back_img_rel else None
-    rendered.append(_render_back_page(back_img_path, back.get("ending", ""), px_w, px_h))
+        # 2. 正文页
+        for idx, page in enumerate(data.get("pages", []), start=1):
+            img_file = base_dir / page.get("image", "")
+            if not img_file.is_file():
+                print(f"错误：找不到第 {idx} 页图片：{img_file}", file=sys.stderr)
+                sys.exit(1)
+            rendered.append(_render_body_page(prep_img(img_file), page.get("text", ""), idx, px_w, px_h))
+
+        # 3. 封底
+        back = data.get("back", {})
+        back_img_rel = back.get("image", "").strip()
+        back_img_path = prep_img(base_dir / back_img_rel) if back_img_rel else None
+        rendered.append(_render_back_page(back_img_path, back.get("ending", ""), px_w, px_h))
 
     out_path = Path(pdf_path).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -381,6 +400,7 @@ def build_pdf(
     dpi: int = 150,
     blank_back: bool = False,
     bleed_mm: float = 0.0,
+    remove_watermark: bool = False,
 ):
     Image, _, _ = _load_pil()
     image_dir = os.path.abspath(image_dir)
@@ -414,6 +434,8 @@ def build_pdf(
     images = []
     for f in files:
         img = Image.open(f).convert("RGB")
+        if remove_watermark:
+            img = crop_watermark(img)
         images.append(_fit_contain(img, px_w, px_h, bg_color="white"))
 
     if blank_back:
@@ -445,6 +467,7 @@ def main():
     parser.add_argument("--dpi", type=int, default=None, help="输出分辨率 DPI（默认 150）")
     parser.add_argument("--bleed", type=float, default=0.0, help="四边印刷出血位（mm，默认 0，实体印刷常用 3）")
     parser.add_argument("--blank-back", action="store_true", help="目录模式下自动追加温暖纯色渐变封底页")
+    parser.add_argument("--crop-watermark", action="store_true", help="等比裁去图片右下角约 6.5% 的平台水印区域")
     parser.add_argument("positional", nargs="*", help="兼容模式位置参数：<图片目录> <输出pdf> [宽mm] [高mm] [dpi]")
 
     args = parser.parse_args()
@@ -457,6 +480,7 @@ def main():
             size_override=args.size,
             dpi=args.dpi or 150,
             bleed_mm=args.bleed,
+            remove_watermark=args.crop_watermark,
         )
         return
 
@@ -479,6 +503,7 @@ def main():
         dpi=dpi,
         blank_back=args.blank_back,
         bleed_mm=args.bleed,
+        remove_watermark=args.crop_watermark,
     )
 
 

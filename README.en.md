@@ -46,7 +46,7 @@ Examples below are generated from a real 20-page family storybook (*Starlight Re
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.0.0): 4-step workflow & CLI triggers
+├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.1.0): 4-step workflow & CLI triggers
 ├── assets/
 │   └── picture_book_template.html     # Interactive HTML e-book template (single-page flip, double spread, scroll & print)
 ├── docs/
@@ -140,8 +140,8 @@ pip install Pillow
 # 1. Validate page count & disk images only
 python scripts/build_book.py --book ./book/book.json --check-only
 
-# 2. Generate interactive HTML e-book + full-text printable PDF (optional --bleed 3 for 3mm print bleed)
-python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --bleed 3
+# 2. Generate interactive HTML e-book + full-text printable PDF (optional --crop-watermark & --bleed 3)
+python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --crop-watermark --bleed 3
 ```
 
 **Legacy Mode: Stitch an image directory directly into a PDF (automatically excludes `ref_*` sheets)**:
@@ -149,8 +149,8 @@ python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 
 # Square 8" (203mm × 203mm, 150dpi)
 python scripts/build_pdf.py ./book ./book_8inch.pdf --size square8
 
-# Landscape 12" (305mm × 229mm, 150dpi) with auto warm-gradient back cover
-python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --blank-back
+# Landscape 12" (305mm × 229mm, 150dpi) with watermark crop & auto warm-gradient back cover
+python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --crop-watermark --blank-back
 ```
 
 ---
@@ -159,14 +159,14 @@ python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --blank-back
 
 When iterating on or extending this skill, follow the **"Separate Rules from Story Content"** and **Progressive Disclosure** principles:
 
-- **`SKILL.md`**: Keep lean and focused on the 4-step workflow and CLI commands to avoid context bloat.
+- **`SKILL.md`**: Keep lean with the 4-step workflow, core cross-model guardrails, and CLI commands to avoid context bloat.
 - **`references/consistency_rules.md`**: Maintain reusable cross-page consistency rules using placeholders (`<prop>`, `<character>`).
-- **`references/story_prompts.md` & `references/qa_checklist.md`**: Maintain templates, prompt examples, and phase-gated QA checklists.
+- **`references/story_prompts.md` & `references/qa_checklist.md`**: Maintain templates, prompt examples, and fact-answer QA checklists.
 
 ---
 
 ## Privacy & License
 
 - **Privacy & Portraits**: User-uploaded personal photos must be used strictly for creating the requested picture book and never shared externally.
-- **Author**: Steven的能量场 (Skill `v2.0.0`)
+- **Author**: Steven的能量场 (Skill `v2.1.0`)
 - **License**: Licensed under the [Apache License 2.0](LICENSE).

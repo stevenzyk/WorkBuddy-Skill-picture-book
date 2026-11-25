@@ -46,7 +46,7 @@
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # 技能核心入口（WorkBuddy 规范，v2.0.0）：四步工作流与脚本调用
+├── SKILL.md                           # 技能核心入口（WorkBuddy 规范，v2.1.0）：四步工作流与脚本调用
 ├── assets/
 │   └── picture_book_template.html     # 可单页翻页 / 双页对开 / 滚动阅读与打印的 HTML 电子绘本模板
 ├── docs/
@@ -140,8 +140,8 @@ pip install Pillow
 # 1. 仅校验面数与图片完整性
 python scripts/build_book.py --book ./book/book.json --check-only
 
-# 2. 一键生成可翻页 HTML 与打印级完整图文 PDF（可选 --bleed 3 添加 3mm 实体印刷出血位）
-python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --bleed 3
+# 2. 一键生成可翻页 HTML 与打印级完整图文 PDF（可选 --crop-watermark 同步去右下角水印、--bleed 3 添加 3mm 印刷出血位）
+python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --crop-watermark --bleed 3
 ```
 
 **兼容模式：直接把纯插画目录合成为 PDF（自动排除 `ref_*` 参考图）**：
@@ -149,8 +149,8 @@ python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 
 # 方款 8 寸 (203mm × 203mm, 150dpi)
 python scripts/build_pdf.py ./book ./book_8inch.pdf --size square8
 
-# 横款 12 寸 (305mm × 229mm, 150dpi) 并自动追加渐变封底
-python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --blank-back
+# 横款 12 寸 (305mm × 229mm, 150dpi) 并自动去水印 + 追加渐变封底
+python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --crop-watermark --blank-back
 ```
 
 ---
@@ -159,14 +159,14 @@ python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --blank-back
 
 若需对本技能规则进行迭代优化，请遵循 `SKILL.md` 中规定的**「规则与故事分离」**与**「渐进式披露」**原则：
 
-- **`SKILL.md`**：只保留精炼的四步工作流与脚本调用入口，避免冗余堆砌占用上下文。
+- **`SKILL.md`**：只保留精炼的四步工作流、核心跨模型防翻车红线与脚本调用入口，避免冗余堆砌占用上下文。
 - **`references/consistency_rules.md`**：维护跨页一致性通用规则（使用 `<道具>`、`<角色>` 等占位符与原则句）。
-- **`references/story_prompts.md` & `references/qa_checklist.md`**：维护故事圣经模板、提示词范例与分阶段核验清单。
+- **`references/story_prompts.md` & `references/qa_checklist.md`**：维护故事圣经模板、提示词范例与事实反问式核验清单。
 
 ---
 
 ## 隐私与协议
 
 - **肖像与隐私**：用户上传的人物照片仅用于当前绘本创作流程，严禁擅自外传或挪作他用。
-- **作者**：Steven的能量场（Skill 版本 `v2.0.0`）
+- **作者**：Steven的能量场（Skill 版本 `v2.1.0`）
 - **开源协议**：本项目基于 [Apache License 2.0](LICENSE) 开源。
