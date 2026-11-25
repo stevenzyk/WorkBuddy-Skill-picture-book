@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的童话绘本</title>
+<style>
+  :root {
+    --page-bg: #ffffff;
+    --text: #3a3a3a;
+    --accent: #e8a87c;
+    --font-title: "Noto Serif SC", "STZhongsong", "SimSun", serif;
+    --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f4efe8;
+    font-family: var(--font-body);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  /* 工具栏 */
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    width: 100%;
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid #eee;
+    padding: 12px 20px;
+    display: flex; gap: 10px; align-items: center; justify-content: center;
+    flex-wrap: wrap;
+  }
+  .toolbar button {
+    padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px;
+    background: #fff; cursor: pointer; font-size: 14px; color: #555;
+    transition: all .2s;
+  }
+  .toolbar button:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .toolbar .title { font-size: 15px; color: #999; margin-right: auto; font-family: var(--font-title); }
+  .book {
+    margin: 30px 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+  }
+  .page {
+    width: 560px; max-width: 92vw;
+    min-height: 700px;
+    background: var(--page-bg);
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.10);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .page .art {
+    flex: 1; min-height: 420px;
+    background-size: cover; background-position: center;
+    background-color: #f0e6d8;
+  }
+  .page .text {
+    padding: 24px 30px 30px;
+    font-family: var(--font-body);
+    font-size: 18px; line-height: 1.9; color: var(--text);
+    text-align: center;
+  }
+  .page .text .page-no {
+    display: block; margin-top: 14px; font-size: 12px; color: #c0b8ae; letter-spacing: 1px;
+  }
+  /* 封面页 */
+  .page.cover .art {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 40px;
+    min-height: 620px;
+  }
+  .page.cover h1 {
+    font-family: var(--font-title);
+    font-size: 40px; color: #fff; letter-spacing: 4px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.35);
+    margin-bottom: 12px;
+  }
+  .page.cover .subtitle {
+    font-size: 16px; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.4);
+  }
+  /* 封底页 */
+  .page.back .art {
+    display: flex; align-items: center; justify-content: center; text-align: center; padding: 40px;
+    background: linear-gradient(160deg, #fbe9dd, #f6d9c3);
+  }
+  .page.back .ending {
+    font-family: var(--font-title); font-size: 22px; color: #7a5a44; line-height: 2;
+  }
+
+  /* 打印样式 */
+  @media print {
+    body { background: #fff; }
+    .toolbar { display: none; }
+    .book { margin: 0; gap: 0; }
+    .page {
+      width: 100%; max-width: none; border-radius: 0;
+      box-shadow: none; min-height: 100vh;
+      page-break-after: always;
+      break-after: page;
+    }
+    .page .art { min-height: 70vh; }
+  }
+  /* 注意：@page size 必须按第一步选定的绘本尺寸设置，勿用默认 200mm：
+     方款8寸=203mm 203mm；方款10寸=254mm 254mm；
+     横款12寸=305mm 229mm；竖款12寸=229mm 305mm */
+  @page { size: 203mm 203mm; margin: 0; }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <span class="title">📖 我的童话绘本</span>
+    <button onclick="window.print()">🖨️ 打印 / 导出 PDF</button>
+  </div>
+
+  <div class="book" id="book">
+    <!-- 封面 -->
+    <div class="page cover">
+      <div class="art" style="background-image: url('page_01_cover.png');">
+        <h1>我的童话故事</h1>
+        <div class="subtitle">献给最勇敢的你</div>
+      </div>
+    </div>
+
+    <!-- 正文页示例（替换为真实内容） -->
+    <div class="page">
+      <div class="art" style="background-image: url('page_02.png');"></div>
+      <div class="text">
+        从前有一个小女孩，她有一双明亮的大眼睛。
+        <span class="page-no">1</span>
+      </div>
+    </div>
+
+    <!-- 封底 -->
+    <div class="page back">
+      <div class="art">
+        <div class="ending">善良的心，<br>是世界上最亮的灯。</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 预留：可通过脚本动态注入更多页
+  </script>
+</body>
+</html>
