@@ -46,7 +46,7 @@ Examples below are generated from a real 20-page family storybook (*Starlight Re
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.2.0): 4-step workflow & CLI triggers
+├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.3.0): 4-step workflow & CLI triggers
 ├── assets/
 │   └── picture_book_template.html     # Interactive HTML e-book template (single-page flip, double spread, scroll & print)
 ├── docs/
@@ -54,10 +54,11 @@ workbuddy-skill-picture-book/
 │       ├── demo_html_preview.jpg
 │       └── demo_consistency.jpg
 ├── references/
-│   ├── story_prompts.md               # Story Bible template, script template, book.json schema, style prefixes & specs
-│   ├── consistency_rules.md           # Cross-page consistency & anti-drift rules (whitelist, multi-char, 4 ref types)
-│   └── qa_checklist.md                # During-generation & pre-layout QA checklists
+│   ├── story_prompts.md               # 4 Story Blueprints, complexity budget, story_plan.json schema & specs
+│   ├── consistency_rules.md           # Identity + Look decoupling, anti-kinship-bias, anti-pose-lock & 4 ref types
+│   └── qa_checklist.md                # 4 quality gates & 5-question fact-answer QA checklist
 ├── scripts/
+│   ├── compile_prompts.py             # story_plan.json validator + zero-loss prompt compiler + book.json generator
 │   ├── build_book.py                  # One-command book.json validator + HTML & printable PDF builder
 │   └── build_pdf.py                   # Pillow-based full-text printable PDF builder (backwards-compatible dir mode)
 ├── LICENSE                            # Apache License 2.0
@@ -97,16 +98,17 @@ workbuddy-skill-picture-book/
 
 ## Workflow
 
-The skill follows a strict four-step closed loop:
+The skill follows a strict four-step closed loop engineered to perform reliably across both frontier and lightweight models:
 
-1. **Photo Pre-Check & Creative Requirements**
-   - Evaluate uploaded photos for clarity, angle, and headcount (1–4 characters work best) before confirming **illustration style, book size, page count, and story theme/source** (favoring high-tolerance styles and single-day themes by default).
-2. **Write the Story Bible & Page-by-Page Script (Checkpoint 1)**
-   - Build the Story Bible (character anchors, relative height lock, scene list, prop/state timeline) and paginated script with mandatory **caption-noun checklists & gaze/interaction directions**, then **wait for explicit user confirmation before generating images**.
-3. **Approve Reference Sheets + 2 Sample Pages, Then Batch Generate (Checkpoint 2)**
-   - Generate standing full-body character reference sheets, element reference sheets, and **cover + 1 representative body page** for user sign-off on likeness, proportions, and natural posing before batch-generating the remaining pages with 5-question fact-answer QA every 1–3 pages.
+1. **Photo Pre-Check & Creative Specifications**
+   - Evaluate uploaded photos for clarity, angle, and headcount (1–4 characters work best) and confirm **illustration style, book size, page count, and story theme/source**.
+2. **[Checkpoint 1] Combined Profile, Look & Script Confirmation → `compile_prompts.py`**
+   - Confirm **objective character profiles (exact numeric age, gender, relative heights) + outfit `Looks` (1–3 looks supporting seasonal changes, barefoot wading, or costume swaps) + page captions** in a single user checkpoint.
+   - Write `story_plan.json` and run `scripts/compile_prompts.py` to auto-synthesize bias-free subject tags (blocking `son/daughter` juvenile shrinkage on adults), verify zero missing character actions and 100% caption-noun coverage, and output `prompts_manifest.md` + `book.json`.
+3. **[Checkpoint 2] Approve Standing Look Sheets + Sample Pages → Batch Generation**
+   - Generate full-body standing `Look` reference sheets (chained from `look_1` to lock faces and heights across outfit changes) + element sheets + **cover & Page 1 samples** for user sign-off, then generate remaining pages in batches of 2–3 with 5-question fact-answer QA.
 4. **Automated Validation, Dual Export & Single-Page Revisions**
-   - Write `book.json`, validate with `scripts/build_book.py --check-only`, and export both the interactive HTML e-book and full-text printable PDF (with optional `--crop-watermark` & `--bleed`). Supports targeted single-page redraws and one-command repackaging.
+   - Run `scripts/build_book.py` to validate and export both the interactive HTML e-book and full-text printable PDF (with optional `--crop-watermark` & `--bleed`). Supports targeted single-page redraws and one-command repackaging.
 
 ---
 
@@ -125,19 +127,22 @@ The skill follows a strict four-step closed loop:
    - *"Turn this photo of my child into an 8-inch square, 12-page forest adventure fairy tale picture book in soft watercolor style."*
    - *"Create a printable 20-page landscape 12-inch family fairy tale picture book based on this family photo."*
 
-### Run the Builder & PDF Scripts Standalone
+### Run the Compiler, Builder & PDF Scripts Standalone
 
 **Prerequisite**:
 ```bash
 pip install Pillow
 ```
 
-**Recommended: Validate and build HTML + full-text printable PDF from `book.json`**:
+**Full Deterministic Pipeline (`story_plan.json` → `prompts_manifest.md` + `book.json` → HTML + PDF)**:
 ```bash
-# 1. Validate page count & disk images only
+# 1. Validate story_plan.json, compile zero-loss ImageGen prompts, and auto-generate book.json
+python scripts/compile_prompts.py --plan ./book/story_plan.json
+
+# 2. Validate page count & disk images after image generation
 python scripts/build_book.py --book ./book/book.json --check-only
 
-# 2. Generate interactive HTML e-book + full-text printable PDF (optional --crop-watermark & --bleed 3)
+# 3. Generate interactive HTML e-book + full-text printable PDF (optional --crop-watermark & --bleed 3)
 python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --crop-watermark --bleed 3
 ```
 
@@ -154,16 +159,16 @@ python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --crop-watermar
 
 ## Maintenance Guidelines
 
-When iterating on or extending this skill, follow the **"Separate Rules from Story Content"** and **Progressive Disclosure** principles:
+When iterating on or extending this skill, follow the **"Separate Rules from Story Content"** and **Deterministic Code Guardrails** principles:
 
-- **`SKILL.md`**: Keep lean with the 4-step workflow, core cross-model guardrails, and CLI commands to avoid context bloat.
-- **`references/consistency_rules.md`**: Maintain reusable cross-page consistency rules using placeholders (`<prop>`, `<character>`).
-- **`references/story_prompts.md` & `references/qa_checklist.md`**: Maintain templates, prompt examples, and fact-answer QA checklists.
+- **`SKILL.md`**: Keep lean with the 4-step workflow, 2 user checkpoints, and CLI commands.
+- **`scripts/compile_prompts.py` & `scripts/build_book.py`**: Handle prompt assembly, placeholder expansion, noun checks, and layout validation deterministically in Python.
+- **`references/`**: Maintain reusable story blueprints, Identity + `Look` rules, and fact-answer QA checklists.
 
 ---
 
 ## Privacy & License
 
 - **Privacy & Portraits**: User-uploaded personal photos must be used strictly for creating the requested picture book and never shared externally.
-- **Author**: Steven的能量场 (Skill `v2.2.0`)
+- **Author**: Steven的能量场 (Skill `v2.3.0`)
 - **License**: Licensed under the [Apache License 2.0](LICENSE).

@@ -46,7 +46,7 @@
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # 技能核心入口（WorkBuddy 规范，v2.2.0）：四步工作流与脚本调用
+├── SKILL.md                           # 技能核心入口（WorkBuddy 规范，v2.3.0）：四步工作流与脚本调用
 ├── assets/
 │   └── picture_book_template.html     # 可单页翻页 / 双页对开 / 滚动阅读与打印的 HTML 电子绘本模板
 ├── docs/
@@ -54,10 +54,11 @@ workbuddy-skill-picture-book/
 │       ├── demo_html_preview.jpg
 │       └── demo_consistency.jpg
 ├── references/
-│   ├── story_prompts.md               # 故事圣经模板、分页脚本模板、book.json 规范、风格前缀与规格对照表
-│   ├── consistency_rules.md           # 跨页一致性与防漂移规范（正面写全白名单、多角色、四类基准图等）
-│   └── qa_checklist.md                # 边生成边核验与排版前全书总检清单
+│   ├── story_prompts.md               # 4 套高胜率故事骨架、极简剧场预算、story_plan.json 规范与规格表
+│   ├── consistency_rules.md           # 角色本体与 Look 造型解耦、防辈分词缩水、防摆拍与四类基准图细则
+│   └── qa_checklist.md                # 四道质量关口与 5 题事实反问审图清单
 ├── scripts/
+│   ├── compile_prompts.py             # story_plan.json 校验器 + 零丢失 Prompt 编译器 + book.json 生成器
 │   ├── build_book.py                  # 一键校验 book.json 并生成可翻页 HTML + 图文 PDF
 │   └── build_pdf.py                   # 基于 Pillow 的打印级图文 PDF 合成脚本（兼容纯图片目录模式）
 ├── LICENSE                            # Apache License 2.0 开源协议
@@ -97,16 +98,17 @@ workbuddy-skill-picture-book/
 
 ## 工作流程
 
-本技能严格按照以下四步闭环执行：
+本技能严格按照以下四步闭环执行（兼顾强模型上限与轻量模型下限）：
 
-1. **照片体检与确认创作需求**
-   - 先对上传照片做清晰度、角度与人数评估（1–4 人同框效果最稳），并引导确认 **插画风格、绘本尺寸、页数（面数）、故事主题/来源**（默认推荐高容错画风与单日主题）。
-2. **编写「故事圣经」与分页脚本（检查点 1）**
-   - 完成故事圣经（人物设定、相对身高锁死、视觉锚点、场景清单、道具与状态时间线）与含「文案核心名词清单 / 视线互动方向」的逐页脚本，**展示给用户确认满意后才开始生图**。
-3. **先验基准图 + 2 页样张，再批量生图（检查点 2）**
-   - 先生成自然站姿人物/全员基准图、四类要素基准图，以及**封面 + 1 页典型互动样张**，请用户确认脸型、身高、画风与自然度后再批量生成其余页面，并每 1–3 页做 5 题事实反问审图。
+1. **照片体检与确认创作规格**
+   - 对上传照片做清晰度、角度与人数评估（1–4 人同框最稳），引导确认 **插画风格、绘本尺寸、页数（面数）、故事主题/来源**。
+2. **【检查点 1】合并确认档案、造型与脚本 → `compile_prompts.py` 确定性编译**
+   - 一次性请用户确认 **人物客观档案卡（数字年龄/性别/相对身高）+ 造型服装方案（`Looks`，支持跨季换装/赤脚踩水/变装）+ 分页故事文案**。
+   - 编写 `story_plan.json` 并运行 `scripts/compile_prompts.py`：自动合成客观视觉主语（杜绝 `son/daughter` 辈分词诱发成年人缩水）、核验在场角色无漏人与文案核心名词 100% 进图，零丢失输出全套 `prompts_manifest.md` 与 `book.json`。
+3. **【检查点 2】先验站姿基准图 + 样张 → 小批生图与事实审图**
+   - 按清单生成各套 `Look` 平地自然站姿全身基准图（链式继承锁脸锁身高）+ 要素基准图 + **封面与首张样张**，请用户确认满意后，再每次 2–3 页小批生成并逐页回答 5 题事实审图。
 4. **自动化校验、双格式交付与单页精修**
-   - 生成 `book.json`，运行 `scripts/build_book.py --check-only` 硬校验后，一键输出可翻页 HTML 电子绘本与含完整图文排版的打印级 PDF（支持 `--crop-watermark` 与 `--bleed`）；交付后支持按页码单页重画并一键重打包。
+   - 运行 `scripts/build_book.py` 硬校验并一键输出可翻页 HTML 电子绘本与含完整图文排版的打印级 PDF（支持 `--crop-watermark` 与 `--bleed`）；支持按页码单页重画并一键重打包。
 
 ---
 
@@ -125,19 +127,22 @@ workbuddy-skill-picture-book/
    - 「把这张宝宝照片做成一本方款 8 寸、12 面的森林冒险童话绘本，温馨水彩风。」
    - 「用这张全家福定制一本横款 12 寸、20 面的可打印亲子绘本。」
 
-### 单独运行构建与 PDF 脚本
+### 单独运行编译、构建与 PDF 脚本
 
 **前置依赖**：
 ```bash
 pip install Pillow
 ```
 
-**推荐：通过 `book.json` 一键校验并生成 HTML + 图文 PDF**：
+**完整确定性流水线（`story_plan.json` → `prompts_manifest.md` + `book.json` → HTML + PDF）**：
 ```bash
-# 1. 仅校验面数与图片完整性
+# 1. 校验结构化剧本，零丢失编译全套生图 Prompt 清单并自动生成 book.json
+python scripts/compile_prompts.py --plan ./book/story_plan.json
+
+# 2. 生图完成后，仅校验面数与磁盘图片完整性
 python scripts/build_book.py --book ./book/book.json --check-only
 
-# 2. 一键生成可翻页 HTML 与打印级完整图文 PDF（可选 --crop-watermark 同步去右下角水印、--bleed 3 添加 3mm 印刷出血位）
+# 3. 一键生成可翻页 HTML 与打印级完整图文 PDF（可选 --crop-watermark 同步去右下角水印、--bleed 3 添加 3mm 印刷出血位）
 python scripts/build_book.py --book ./book/book.json --out-dir ./book --dpi 150 --crop-watermark --bleed 3
 ```
 
@@ -154,16 +159,16 @@ python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --crop-watermar
 
 ## 维护与二次开发规范
 
-若需对本技能规则进行迭代优化，请遵循 `SKILL.md` 中规定的**「规则与故事分离」**与**「渐进式披露」**原则：
+若需对本技能规则进行迭代优化，请遵循 `SKILL.md` 中规定的**「规则与故事分离」**与**「代码确定性兜底」**原则：
 
-- **`SKILL.md`**：只保留精炼的四步工作流、核心跨模型防翻车红线与脚本调用入口，避免冗余堆砌占用上下文。
-- **`references/consistency_rules.md`**：维护跨页一致性通用规则（使用 `<道具>`、`<角色>` 等占位符与原则句）。
-- **`references/story_prompts.md` & `references/qa_checklist.md`**：维护故事圣经模板、提示词范例与事实反问式核验清单。
+- **`SKILL.md`**：只保留精炼的四步工作流、两次用户确认关口与脚本调用入口。
+- **`scripts/compile_prompts.py` & `scripts/build_book.py`**：将字符串拼装、占位符替换、漏词检查与排版校验收归 Python 脚本确定性执行。
+- **`references/`**：维护高胜率故事骨架、角色与 `Look` 解耦规则及事实反问核验清单。
 
 ---
 
 ## 隐私与协议
 
 - **肖像与隐私**：用户上传的人物照片仅用于当前绘本创作流程，严禁擅自外传或挪作他用。
-- **作者**：Steven的能量场（Skill 版本 `v2.2.0`）
+- **作者**：Steven的能量场（Skill 版本 `v2.3.0`）
 - **开源协议**：本项目基于 [Apache License 2.0](LICENSE) 开源。
