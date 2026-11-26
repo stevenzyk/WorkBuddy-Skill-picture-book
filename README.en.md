@@ -46,7 +46,7 @@ Examples below are generated from a real 20-page family storybook (*Starlight Re
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.3.0): 4-step workflow & CLI triggers
+├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.4.0): 4-step workflow & CLI triggers
 ├── assets/
 │   └── picture_book_template.html     # Interactive HTML e-book template (single-page flip, double spread, scroll & print)
 ├── docs/
@@ -54,9 +54,9 @@ workbuddy-skill-picture-book/
 │       ├── demo_html_preview.jpg
 │       └── demo_consistency.jpg
 ├── references/
-│   ├── story_prompts.md               # 4 Story Blueprints, complexity budget, story_plan.json schema & specs
-│   ├── consistency_rules.md           # Identity + Look decoupling, anti-kinship-bias, anti-pose-lock & 4 ref types
-│   └── qa_checklist.md                # 4 quality gates & 5-question fact-answer QA checklist
+│   ├── story_prompts.md               # Literary gold standards, 3 tone choices, 4 Story Blueprints & story_plan.json schema
+│   ├── consistency_rules.md           # Identity + Look decoupling, barefoot overrides, prop scale & monotonic timeline rules
+│   └── qa_checklist.md                # Literary anti-alt-text check & 5-question fact-answer QA checklist
 ├── scripts/
 │   ├── compile_prompts.py             # story_plan.json validator + zero-loss prompt compiler + book.json generator
 │   ├── build_book.py                  # One-command book.json validator + HTML & printable PDF builder
@@ -79,14 +79,14 @@ workbuddy-skill-picture-book/
 | **Realistic Illustration** | Soft natural lighting, rich textures, higher portrait likeness fidelity |
 | **Beautiful Storybook** | Delicate painterly strokes, soft dreamy lighting, warm emotional mood |
 
-### 2. Print Sizes & Recommended Aspect Ratios
+### 2. Print Sizes & Frame-Matched Aspect Ratios
 
-| Size Name | `size` Arg | Print Dimensions | Recommended Generation Aspect Ratio |
-|-----------|------------|------------------|-------------------------------------|
-| **Square 8"** *(default)* | `square8` | ~203mm × 203mm | `1:1` |
-| **Square 10"** | `square10` | ~254mm × 254mm | `1:1` |
-| **Landscape 12"** | `landscape12` | ~305mm × 229mm | `4:3` or `3:2` |
-| **Portrait 12"** | `portrait12` | ~229mm × 305mm | `3:4` or `2:3` |
+| Size Name | `size` Arg | Print Dimensions | Cover / Back Aspect Ratio | Body Art Aspect Ratio (78% Frame) |
+|-----------|------------|------------------|---------------------------|-----------------------------------|
+| **Square 8"** *(default)* | `square8` | ~203mm × 203mm | `1:1` | `4:3` *(prevents foot clipping)* |
+| **Square 10"** | `square10` | ~254mm × 254mm | `1:1` | `4:3` *(prevents foot clipping)* |
+| **Landscape 12"** | `landscape12` | ~305mm × 229mm | `4:3` or `3:2` | `16:9` or `3:2` |
+| **Portrait 12"** | `portrait12` | ~229mm × 305mm | `3:4` or `2:3` | `1:1` or `4:3` |
 
 ### 3. Page Counts (Sides)
 
@@ -98,15 +98,15 @@ workbuddy-skill-picture-book/
 
 ## Workflow
 
-The skill follows a strict four-step closed loop engineered to perform reliably across both frontier and lightweight models:
+The skill follows a strict four-step closed loop balancing literary warmth and cross-model determinism:
 
-1. **Photo Pre-Check & Creative Specifications**
-   - Evaluate uploaded photos for clarity, angle, and headcount (1–4 characters work best) and confirm **illustration style, book size, page count, and story theme/source**.
-2. **[Checkpoint 1] Combined Profile, Look & Script Confirmation → `compile_prompts.py`**
-   - Confirm **objective character profiles (exact numeric age, gender, relative heights) + outfit `Looks` (1–3 looks supporting seasonal changes, barefoot wading, or costume swaps) + page captions** in a single user checkpoint.
-   - Write `story_plan.json` and run `scripts/compile_prompts.py` to auto-synthesize bias-free subject tags (blocking `son/daughter` juvenile shrinkage on adults), verify zero missing character actions and 100% caption-noun coverage, and output `prompts_manifest.md` + `book.json`.
+1. **Photo Pre-Check & Creative Specifications (with 3 Literary Tone Options)**
+   - Evaluate uploaded photos for clarity, angle, and headcount (1–4 characters work best) and confirm **illustration style, book size, page count**, and **literary tone** (*Playful Rhythm* / *Curious Treasure-Hunt* / *Warm Poetic Keepsake*).
+2. **[Checkpoint 1] Combined Profile, Look & Literary Script Confirmation → `compile_prompts.py`**
+   - Craft a unifying `story_thread` and evocative, non-alt-text `text_zh` captions anchored to each page's single `event_core`, then confirm **objective character profiles + outfit `Looks` (plus per-page `outfit_overrides_en`) + captions** in a single user checkpoint.
+   - Write `story_plan.json` and run `scripts/compile_prompts.py` to synthesize bias-free adult tags, auto-strip footwear on `barefoot` pages, enforce `prop_states_en` placement and monotonic `(day, time_of_day)` timelines, match cover vs. body aspect ratios, and output `prompts_manifest.md` + `book.json`.
 3. **[Checkpoint 2] Approve Standing Look Sheets + Sample Pages → Batch Generation**
-   - Generate full-body standing `Look` reference sheets (chained from `look_1` to lock faces and heights across outfit changes) + element sheets + **cover & Page 1 samples** for user sign-off, then generate remaining pages in batches of 2–3 with 5-question fact-answer QA.
+   - Generate full-body standing `Look` reference sheets + element sheets + **cover & Page 1 samples** for user sign-off, then generate remaining pages in batches of 2–3 with 5-question fact-answer QA.
 4. **Automated Validation, Dual Export & Single-Page Revisions**
    - Run `scripts/build_book.py` to validate and export both the interactive HTML e-book and full-text printable PDF (with optional `--crop-watermark` & `--bleed`). Supports targeted single-page redraws and one-command repackaging.
 
@@ -125,7 +125,7 @@ The skill follows a strict four-step closed loop engineered to perform reliably 
 2. **Trigger in conversation**:
    Upload a clear, well-lit front-facing portrait or family photo and describe your book request, for example:
    - *"Turn this photo of my child into an 8-inch square, 12-page forest adventure fairy tale picture book in soft watercolor style."*
-   - *"Create a printable 20-page landscape 12-inch family fairy tale picture book based on this family photo."*
+   - *"Create a printable 16-page landscape 12-inch family beach storybook with warm poetic captions."*
 
 ### Run the Compiler, Builder & PDF Scripts Standalone
 
@@ -162,13 +162,13 @@ python scripts/build_pdf.py ./book ./book_12inch.pdf 305 229 150 --crop-watermar
 When iterating on or extending this skill, follow the **"Separate Rules from Story Content"** and **Deterministic Code Guardrails** principles:
 
 - **`SKILL.md`**: Keep lean with the 4-step workflow, 2 user checkpoints, and CLI commands.
-- **`scripts/compile_prompts.py` & `scripts/build_book.py`**: Handle prompt assembly, placeholder expansion, noun checks, and layout validation deterministically in Python.
-- **`references/`**: Maintain reusable story blueprints, Identity + `Look` rules, and fact-answer QA checklists.
+- **`scripts/compile_prompts.py` & `scripts/build_book.py`**: Handle prompt assembly, barefoot shoe stripping, monotonic timeline checks, aspect-ratio matching, and layout validation deterministically in Python.
+- **`references/`**: Maintain literary gold standards, story blueprints, Identity + `Look` rules, and fact-answer QA checklists.
 
 ---
 
 ## Privacy & License
 
 - **Privacy & Portraits**: User-uploaded personal photos must be used strictly for creating the requested picture book and never shared externally.
-- **Author**: Steven的能量场 (Skill `v2.3.0`)
+- **Author**: Steven的能量场 (Skill `v2.4.0`)
 - **License**: Licensed under the [Apache License 2.0](LICENSE).

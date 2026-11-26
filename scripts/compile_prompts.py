@@ -2,14 +2,18 @@
 """
 童话绘本结构化方案编译器（story_plan.json -> prompts_manifest.json / prompts_manifest.md / book.json）。
 
-核心作用（专为跨模型稳定性设计，彻底消除弱模型手抄缩写、张冠李戴与人设漂移）：
-  1. 结构与引用硬校验：核对总面数、角色 ID、造型 Look ID、场景 ID、道具/配角 ID 的完整性。
-  2. 客观身份自动合成：基于用户确认的 (age, gender) 自动生成客观视觉主语（如 "the 24-year-old adult man"），
-     自动展开 {c1} / {prop_id} 占位符，并拦截成年角色误用 son/daughter/boy/girl 等诱发幼童缩水的辈分词。
-  3. 造型（Look）与人衣解耦：自动生成每套 Look 的「全身平地站姿基准图」Prompt（第 2 套起自动链接第 1 套基准图锁脸锁身高），
-     正页按 look_id 自动切换对应服装描述与基准图，杜绝忘记换装或把鞋穿进水里。
-  4. 防漏人与防漏画物体：强制核验每页在场角色均已填写独立动作，且中文文案对应的 caption_nouns_en 100% 落入编译后的英文 Prompt。
-  5. 自动导出 book.json：直接衔接 scripts/build_book.py，无需二次手写。
+核心保障（跨模型稳定，消除手抄缩写、人设漂移、说明书式干瘪文案与穿帮）：
+  1. 客观身份合成与防缩水：基于确认后的 (age, gender) 合成客观主语（如 "the 24-year-old adult man"），
+     展开 {c1}/{prop_id} 占位符，拦截成年角色误用 son/daughter/boy/girl 等诱发幼童化的辈分词。
+  2. 造型（Look）解耦 + 页级轻量穿戴覆盖（outfit_overrides_en）：
+     自动生成平地站姿全身基准图（第 2 套起链式继承第 1 套锁脸锁身高）；支持单页赤脚踩水等微调，
+     检测到 barefoot 时自动剥离原 Look 中的鞋袜词，彻底杜绝“穿运动鞋踩浪”。
+  3. 道具挂载必写与防巨型贴图：凡启用 present_props 必填 prop_states_en（持握/挂载/放置位置）；
+     is_small_accessory 随身小件默认仅在 focus_props 特写页才传 1:1 道具参考图，防角落贴出巨型相机。
+  4. 单向时间线硬拦截：scenes 必填 time_of_day（morning < day < sunset < night），支持页级 day 递增与
+     allow_flashback，自动拦截同一天内“晚霞 -> 白天 -> 落日”的时间倒流。
+  5. 封面/正文画幅精准匹配 + 底部防切脚保护：方形绘本封面用 1:1、正文插画框用 4:3 横画幅，并自动追加安全留白。
+  6. 事件同源与绘本文学性：校验 story_thread 与每页 event_core，核验 caption_nouns_en 100% 进图。
 
 用法：
   python scripts/compile_prompts.py --plan ./book/story_plan.json [--out-dir ./book]
@@ -48,12 +52,30 @@ STYLE_PREFIXES = {
     ),
 }
 
-ASPECT_RATIOS = {
+# 封面/封底是整页全出血铺满，正文页上方约 78% 为插画框、下方约 22% 为白底文字栏
+# 按实际画框比例推荐生图画幅（方案 A），彻底消除方形绘本 1:1 图放进扁框被切脚尖的问题
+COVER_ASPECT_RATIOS = {
     "square8": "1:1",
     "square10": "1:1",
-    "landscape12": "3:2 (or 4:3)",
-    "portrait12": "2:3 (or 3:4)",
+    "landscape12": "4:3 (or 3:2)",
+    "portrait12": "3:4 (or 2:3)",
 }
+
+BODY_ASPECT_RATIOS = {
+    "square8": "4:3",
+    "square10": "4:3",
+    "landscape12": "16:9 (or 3:2)",
+    "portrait12": "1:1 (or 4:3)",
+}
+
+TIME_OF_DAY_ORDER = {
+    "morning": 1,
+    "day": 2,
+    "sunset": 3,
+    "night": 4,
+}
+
+VALID_LITERARY_TONES = {"rhythm", "curiosity", "poetic", "custom"}
 
 # 封闭语法集合：英文家庭辈分词会强烈诱导生图模型将成年人画成幼童
 KINSHIP_BIAS_WORDS = re.compile(
@@ -64,6 +86,24 @@ JUVENILE_WORDS = re.compile(
     r"\b(boy|boys|girl|girls|kid|kids|child|children|toddler|toddlers)\b",
     re.IGNORECASE,
 )
+
+# 当页级 outfit_overrides_en 含 barefoot 时，自动剥离原服装串末尾的鞋袜描述
+BAREFOOT_TRIGGER = re.compile(r"\bbarefoot\b", re.IGNORECASE)
+FOOTWEAR_CLAUSE_RE = re.compile(
+    r"(?:,\s*(?:and\s+)?|\s+and\s+|\s+with\s+)"
+    r"(?:[a-z0-9-]+\s+){0,3}"
+    r"(?:sneakers|shoes|boots|sandals|loafers|slippers|heels|flats|footwear|socks)\b",
+    re.IGNORECASE,
+)
+
+
+def _apply_outfit_override(base_outfit: str, override: str) -> str:
+    if not override:
+        return base_outfit
+    result = base_outfit
+    if BAREFOOT_TRIGGER.search(override):
+        result = FOOTWEAR_CLAUSE_RE.sub("", result).rstrip(" ,;")
+    return f"{result}, {override}"
 
 
 def _build_subject_tag(char: Dict, collision_index: int = 0) -> str:
@@ -121,6 +161,18 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
     if not title:
         errors.append("缺少必填字段：title")
 
+    story_thread = (plan.get("story_thread") or "").strip()
+    if not story_thread:
+        errors.append(
+            "缺少必填字段：story_thread（请用一句话写明贯穿全书的文学串珠线索，如收集四个声音/一个小秘密/重复韵律，告别流水账）"
+        )
+
+    literary_tone = (plan.get("literary_tone") or "poetic").strip().lower()
+    if literary_tone not in VALID_LITERARY_TONES:
+        warnings.append(
+            f"literary_tone '{literary_tone}' 不在预设列表 {sorted(VALID_LITERARY_TONES)} 中，将按自定义文风处理"
+        )
+
     size = (plan.get("size") or "square8").strip()
     if size not in SIZE_PRESETS:
         errors.append(f"size '{size}' 无效，可选：{', '.join(SIZE_PRESETS)}")
@@ -163,7 +215,7 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         else:
             subject_tags[cid] = _build_subject_tag(ch, 0)
 
-    # 2. 解析道具与动物配角
+    # 2. 解析道具、动物配角、场景与造型
     props: Dict[str, Dict] = plan.get("props") or {}
     sidekicks: Dict[str, Dict] = plan.get("sidekicks") or {}
     scenes: Dict[str, Dict] = plan.get("scenes") or {}
@@ -174,15 +226,20 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
     if not scenes:
         errors.append("scenes 不能为空，至少需定义 1 个场景锚点")
 
-    # 视觉复杂度预算温和提醒
+    for sc_id, sc_info in scenes.items():
+        tod = (sc_info.get("time_of_day") or "").strip().lower()
+        if tod not in TIME_OF_DAY_ORDER:
+            errors.append(
+                f"场景 '{sc_id}' 缺少有效的必填字段 time_of_day（可选：morning / day / sunset / night），用于防时间线倒流"
+            )
+
     if len(looks) > 3:
-        warnings.append(f"当前定义了 {len(looks)} 套造型（建议 ≤ 3 套，造型过多会增加换装漂移风险）")
+        warnings.append(f"当前定义了 {len(looks)} 套造型（建议 ≤ 3 套，单页赤脚/戴帽等微调优先用页级 outfit_overrides_en）")
     if len(scenes) > 5:
         warnings.append(f"当前定义了 {len(scenes)} 个场景（建议 ≤ 4–5 个核心场景以提升全书连贯度）")
     if len(props) + len(sidekicks) > 4:
         warnings.append(f"当前跨页道具+配角共 {len(props) + len(sidekicks)} 个（建议 ≤ 2–3 个核心元素）")
 
-    # 构造全局占位符映射：{c1} -> 客观主语标签，{prop_id} -> 道具简短指代或完整锚点
     token_map: Dict[str, str] = dict(subject_tags)
     for pid, pinfo in props.items():
         token_map[pid] = (pinfo.get("short_en") or pinfo.get("anchor_en") or pid).strip()
@@ -208,7 +265,6 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
                     f"{field_label} 全员均为成年人，禁止出现幼童词 '{m2.group(0)}'，请改用角色占位符或 adult man/woman。"
                 )
 
-    # 校验角色外观与高度描述
     char_identity_full: Dict[str, str] = {}
     for cid, ch in characters.items():
         app = _expand_placeholders((ch.get("appearance_en") or "").strip(), token_map)
@@ -254,7 +310,7 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         ref_prompt = (
             f"{style_prefix}, character reference sheet showing {len(characters)} person(s) standing side by side "
             f"on a flat level floor in a relaxed natural full-body standing pose (head to toe including shoes/feet "
-            f"fully visible, NOT sitting): {'; '.join(char_specs)}.{dist_str} "
+            f"fully visible with comfortable margin below the feet, NOT sitting): {'; '.join(char_specs)}.{dist_str} "
             f"Keep recognizable facial features and exact relative height proportions, "
             f"clean plain warm cream background, no real photo background."
         )
@@ -266,7 +322,7 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
                 "output_image": ref_img,
                 "reference_images": ["<USER_UPLOADED_PHOTO(S)>"] if idx == 0 else [primary_look_ref],
                 "input_fidelity": "low",
-                "aspect_ratio": ASPECT_RATIOS.get(size, "1:1"),
+                "aspect_ratio": BODY_ASPECT_RATIOS.get(size, "4:3") if len(characters) >= 3 else "1:1",
                 "prompt": ref_prompt,
             }
         )
@@ -316,7 +372,7 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
                 }
             )
 
-    # 4. 校验页数并编译封面 + 正文 + 可选封底
+    # 4. 校验页数、单向时间线并编译封面 + 正文 + 可选封底
     pages_raw = plan.get("pages") or []
     total_pages = plan.get("total_pages")
     if total_pages is not None and len(pages_raw) + 2 != int(total_pages):
@@ -328,6 +384,12 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         img_name = (spec.get("image") or "").strip()
         if not img_name and not is_back:
             errors.append(f"{page_label} 缺少 image 文件名")
+
+        event_core = (spec.get("event_core") or "").strip()
+        if not is_cover and not is_back and not event_core:
+            errors.append(
+                f"{page_label} 缺少必填字段 event_core（请用 10 字以内写明本页唯一瞬间核心事件，作为图文同源锚点）"
+            )
 
         scene_id = (spec.get("scene_id") or "").strip()
         if scene_id and scene_id not in scenes:
@@ -341,6 +403,7 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
 
         present_chars: List[str] = spec.get("present_characters") or []
         present_props: List[str] = spec.get("present_props") or []
+        focus_props: List[str] = spec.get("focus_props") or []
         present_sidekicks: List[str] = spec.get("present_sidekicks") or []
 
         for cid in present_chars:
@@ -349,6 +412,9 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         for pid in present_props:
             if pid not in props:
                 errors.append(f"{page_label} 引用了未定义的道具 ID：'{pid}'")
+        for pid in focus_props:
+            if pid not in present_props:
+                errors.append(f"{page_label} 的 focus_props '{pid}' 必须同时包含在 present_props 中")
         for sid in present_sidekicks:
             if sid not in sidekicks:
                 errors.append(f"{page_label} 引用了未定义的配角 ID：'{sid}'")
@@ -358,6 +424,7 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         )
 
         look_id = (spec.get("look_id") or "").strip()
+        outfit_overrides: Dict[str, str] = spec.get("outfit_overrides_en") or {}
         char_segments: List[str] = []
         ref_imgs: List[str] = []
 
@@ -375,13 +442,21 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
             if extra_act:
                 errors.append(f"{page_label} 的 character_actions 包含了不在 present_characters 中的角色：{extra_act}")
 
+            for ocid in outfit_overrides:
+                if ocid not in present_chars:
+                    errors.append(f"{page_label} 的 outfit_overrides_en 角色 '{ocid}' 不在 present_characters 中")
+
             for cid in present_chars:
                 if cid not in characters or look_id not in looks:
                     continue
-                outfit = _expand_placeholders(looks[look_id]["outfits_en"].get(cid, ""), token_map)
+                base_outfit = _expand_placeholders(looks[look_id]["outfits_en"].get(cid, ""), token_map)
+                override_str = _expand_placeholders((outfit_overrides.get(cid) or "").strip(), token_map)
+                check_bias_words(override_str, f"{page_label}.outfit_overrides_en.{cid}", all_adults_here)
+                final_outfit = _apply_outfit_override(base_outfit, override_str)
+
                 act = _expand_placeholders((char_actions.get(cid) or "").strip(), token_map)
                 check_bias_words(act, f"{page_label}.character_actions.{cid}", all_adults_here)
-                char_segments.append(f"{char_identity_full[cid]} ({outfit}) is {act}")
+                char_segments.append(f"{char_identity_full[cid]} ({final_outfit}) is {act}")
 
             absent_chars = [subject_tags[c] for c in characters if c not in present_chars]
             if absent_chars:
@@ -400,18 +475,26 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         else:
             char_segments.append("no human characters in this scene")
 
-        # 道具与配角片段 + 参考图（上限 3 张）
+        # 道具与配角片段 + 参考图策略（防随身小件在远景全身页被贴成巨型角落物体）
         prop_segments: List[str] = []
         prop_states = spec.get("prop_states_en") or {}
         for pid in present_props:
             if pid not in props:
                 continue
-            p_anchor = _expand_placeholders(props[pid]["anchor_en"], token_map)
+            pinfo = props[pid]
+            p_anchor = _expand_placeholders(pinfo["anchor_en"], token_map)
             p_state = _expand_placeholders((prop_states.get(pid) or "").strip(), token_map)
+            if not p_state:
+                errors.append(
+                    f"{page_label} 在 present_props 中启用了道具 '{pid}'，必须在 prop_states_en.{pid} 中写明本页它的具体挂载/持握/放置位置（防孤立巨型道具贴图）！"
+                )
             check_bias_words(p_state, f"{page_label}.prop_states_en.{pid}", all_adults_here)
             prop_segments.append(f"{p_anchor}" + (f" ({p_state})" if p_state else ""))
-            pref = (props[pid].get("ref_image") or "").strip()
-            if pref and pref not in ref_imgs and len(ref_imgs) < 3:
+
+            pref = (pinfo.get("ref_image") or "").strip()
+            is_small = bool(pinfo.get("is_small_accessory", False))
+            should_pass_ref = bool(pref) and (not is_small or pid in focus_props or not present_chars)
+            if should_pass_ref and pref not in ref_imgs and len(ref_imgs) < 3:
                 ref_imgs.append(pref)
 
         for pid, pinfo in props.items():
@@ -425,6 +508,8 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
                 continue
             s_anchor = _expand_placeholders(sidekicks[sid]["anchor_en"], token_map)
             s_act = _expand_placeholders((sidekick_actions.get(sid) or "").strip(), token_map)
+            if not s_act:
+                errors.append(f"{page_label} 在 present_sidekicks 中启用了配角 '{sid}'，请填写 sidekick_actions.{sid}")
             prop_segments.append(f"{s_anchor}" + (f" is {s_act}" if s_act else ""))
             sref = (sidekicks[sid].get("ref_image") or "").strip()
             if sref and sref not in ref_imgs and len(ref_imgs) < 3:
@@ -435,11 +520,19 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         check_bias_words(extras, f"{page_label}.scene_extras_en", all_adults_here)
         check_bias_words(gaze, f"{page_label}.shot_and_gaze_en", all_adults_here)
 
+        margin_guard = (
+            "keep comfortable breathing room above heads and below feet/props so feet and foreground objects "
+            "are never cut off at the bottom border"
+        )
         if is_cover:
-            cover_rule = "leave clear empty space at the top of the image for the title text, main figures placed in the lower two-thirds of the frame"
+            cover_rule = (
+                "leave clear empty space at the top 28% of the image for the title text, "
+                f"main figures placed in the lower two-thirds of the frame, {margin_guard}"
+            )
             gaze = f"{gaze}, {cover_rule}" if gaze else cover_rule
-        elif not is_back and present_chars and not gaze:
-            gaze = "candid natural storybook moment, characters engaged in the scene action, NOT staring stiffly at the camera"
+        elif not is_back and present_chars:
+            default_gaze = "candid natural storybook moment, characters engaged in the scene action, NOT staring stiffly at the camera"
+            gaze = f"{gaze or default_gaze}, {margin_guard}"
 
         parts = [
             style_prefix,
@@ -453,28 +546,32 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
 
         compiled_prompt = ". ".join(p.rstrip(".") for p in parts if p) + "."
 
-        # 核验中文文案核心名词是否 100% 落入编译后的英文 Prompt
+        # 核验中文文案核心具象名词是否 100% 落入编译后的英文 Prompt
         if not is_cover and not is_back:
             if "caption_nouns_en" not in spec:
-                errors.append(f"{page_label} 缺少必填字段 caption_nouns_en（请列出本页中文文案对应的英文核心物体词，无具体物体填 []）")
+                errors.append(
+                    f"{page_label} 缺少必填字段 caption_nouns_en（请列出本页中文文案对应的英文核心具象物体词，无具体物体填 []）"
+                )
             else:
                 prompt_lower = compiled_prompt.lower()
                 for noun in spec.get("caption_nouns_en") or []:
                     n_clean = noun.strip().lower()
                     if n_clean and n_clean not in prompt_lower:
                         errors.append(
-                            f"{page_label} 文案核心名词 '{noun}' 未出现在该页英文描述（scene_extras_en / character_actions / props）中，请补全以防漏画！"
+                            f"{page_label} 文案核心名词 '{noun}' 未出现在该页英文描述（scene_extras_en / character_actions / props）中，请补全以防图文脱节！"
                         )
 
+        target_ar = COVER_ASPECT_RATIOS.get(size, "1:1") if (is_cover or is_back) else BODY_ASPECT_RATIOS.get(size, "4:3")
         return {
             "page_label": page_label,
+            "event_core": event_core,
             "output_image": img_name,
             "look_id": look_id,
             "scene_id": scene_id,
             "text_zh": (spec.get("text_zh") or "").strip(),
             "reference_images": ref_imgs,
             "input_fidelity": "low" if ref_imgs else None,
-            "aspect_ratio": ASPECT_RATIOS.get(size, "1:1"),
+            "aspect_ratio": target_ar,
             "prompt": compiled_prompt,
         }
 
@@ -486,10 +583,39 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
     else:
         page_tasks.append(compile_single_page(cover_spec, "封面 (cover)", is_cover=True))
 
+    # 单向时间线硬拦截（方案 B：基于 (day, time_of_day) 单调不减，支持显式 day 递增与 allow_flashback）
+    current_day = 1
+    prev_timeline_point: Tuple[int, int, str, str] = (0, 0, "", "")
+
     for idx, p_spec in enumerate(pages_raw, start=1):
+        p_label = f"正文第 {idx} 页"
         if not (p_spec.get("text_zh") or "").strip():
-            errors.append(f"第 {idx} 页缺少中文文案 text_zh")
-        page_tasks.append(compile_single_page(p_spec, f"正文第 {idx} 页"))
+            errors.append(f"{p_label} 缺少中文文案 text_zh")
+
+        if "day" in p_spec and p_spec["day"] is not None:
+            new_day = int(p_spec["day"])
+            if new_day < current_day and not p_spec.get("allow_flashback", False):
+                errors.append(
+                    f"时间线倒流：{p_label} 的 day={new_day} 小于前一页的 day={current_day}（若为回忆闪回请设 \"allow_flashback\": true）"
+                )
+            current_day = new_day
+
+        sc_id = (p_spec.get("scene_id") or "").strip()
+        tod_str = (scenes.get(sc_id, {}).get("time_of_day") or "").strip().lower()
+        if tod_str in TIME_OF_DAY_ORDER and not p_spec.get("allow_flashback", False):
+            tod_num = TIME_OF_DAY_ORDER[tod_str]
+            prev_day, prev_tod_num, prev_tod_str, prev_label = prev_timeline_point
+            if (current_day, tod_num) < (prev_day, prev_tod_num):
+                errors.append(
+                    f"时间线倒流：{p_label}（day={current_day}, time_of_day='{tod_str}'）早于 {prev_label}（day={prev_day}, time_of_day='{prev_tod_str}'）。"
+                    f"若属同一天，请调整页序或更换为 {prev_tod_str} 及之后的场景；若已进入第二天/下一季节，请在该页设置 \"day\": {prev_day + 1}。"
+                )
+            prev_timeline_point = (current_day, tod_num, tod_str, p_label)
+
+        compiled_page = compile_single_page(p_spec, p_label)
+        compiled_page["day"] = current_day
+        compiled_page["time_of_day"] = tod_str
+        page_tasks.append(compiled_page)
 
     back_spec = plan.get("back") or {}
     if (back_spec.get("image") or "").strip():
@@ -507,8 +633,11 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
     manifest = {
         "title": title,
         "subtitle": subtitle,
+        "story_thread": story_thread,
+        "literary_tone": literary_tone,
         "size": size,
-        "aspect_ratio": ASPECT_RATIOS.get(size, "1:1"),
+        "cover_aspect_ratio": COVER_ASPECT_RATIOS.get(size, "1:1"),
+        "body_aspect_ratio": BODY_ASPECT_RATIOS.get(size, "4:3"),
         "total_pages": len(pages_raw) + 2,
         "subject_tags": subject_tags,
         "reference_sheet_tasks": ref_tasks,
@@ -536,12 +665,12 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
     manifest_json_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     book_json_path.write_text(json.dumps(book_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # 输出可读性极强的 Markdown 任务单，方便任意模型直接照单调用 ImageGen
     md_lines = [
         f"# 《{title}》生图执行清单（自动编译，请勿手改缩写）",
         "",
-        f"- **规格**：`{size}` ｜ **推荐画幅**：`{ASPECT_RATIOS.get(size, '1:1')}` ｜ **总面数**：`{len(pages_raw) + 2}` 面",
-        "- **执行铁律**：逐项原样复制下方 `Prompt` 与 `参考图` 调用 `ImageGen`；先完成「阶段 3A（全部基准图 + 封面 + 正文第 1 页）」交给用户确认，确认后再分批生成其余正页。",
+        f"- **规格**：`{size}` ｜ **封面画幅**：`{COVER_ASPECT_RATIOS.get(size, '1:1')}` ｜ **正文插画画幅**：`{BODY_ASPECT_RATIOS.get(size, '4:3')}` ｜ **总面数**：`{len(pages_raw) + 2}` 面",
+        f"- **全书文学串珠线**：{story_thread}（文风：`{literary_tone}`）",
+        "- **执行铁律**：逐项原样复制下方 `Prompt`、**按标注画幅比例**与 `参考图` 调用 `ImageGen`；先完成「阶段 3A（全部基准图 + 封面 + 正文第 1 页）」交给用户确认，确认后再分批生成其余正页。",
         "",
         "## 一、基准图生成任务（Reference Sheets）",
         "",
@@ -562,11 +691,13 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
     md_lines.extend(["## 二、绘本页面生成任务（Pages）", ""])
     for pt in page_tasks:
         refs_str = ", ".join(f"`{r}`" for r in pt["reference_images"]) if pt["reference_images"] else "无（纯文生图，勿传人物照）"
+        time_badge = f" ｜ **时间**：Day {pt['day']} · `{pt['time_of_day']}`" if "day" in pt else ""
+        event_badge = f"\n- **本页同源核心事件**：{pt['event_core']}" if pt.get("event_core") else ""
         md_lines.extend(
             [
                 f"### {pt['page_label']} → `{pt['output_image']}`",
-                f"- **绑定造型**：`{pt['look_id'] or '无'}` ｜ **场景**：`{pt['scene_id']}`",
-                f"- **中文文案**：{pt['text_zh'] or '（封面/封底）'}",
+                f"- **绑定造型**：`{pt['look_id'] or '无'}` ｜ **场景**：`{pt['scene_id']}`{time_badge}{event_badge}",
+                f"- **绘本文案**：{pt['text_zh'] or '（封面/封底）'}",
                 f"- **必传参考图**：{refs_str}",
                 f"- **画幅**：`{pt['aspect_ratio']}`",
                 "- **Prompt**：",

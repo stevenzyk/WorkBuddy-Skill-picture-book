@@ -92,8 +92,8 @@ def crop_watermark(img, ratio: float = 0.065):
     return img.crop((0, 0, new_w, new_h))
 
 
-def _fit_cover(img, target_w: int, target_h: int):
-    """等比放大并居中裁切铺满目标区域（类似 CSS object-fit: cover），无白边、不变形。"""
+def _fit_cover(img, target_w: int, target_h: int, vertical_focus: float = 0.5):
+    """等比放大并裁切铺满目标区域（vertical_focus=0.65 时略偏下保留脚部与前景地面道具，防止切脚尖）。"""
     Image, _, _ = _load_pil()
     src_w, src_h = img.size
     scale = max(target_w / src_w, target_h / src_h)
@@ -101,7 +101,7 @@ def _fit_cover(img, target_w: int, target_h: int):
     new_h = max(1, int(round(src_h * scale)))
     resized = img.resize((new_w, new_h), Image.LANCZOS)
     left = (new_w - target_w) // 2
-    top = (new_h - target_h) // 2
+    top = int(round((new_h - target_h) * max(0.0, min(1.0, vertical_focus))))
     return resized.crop((left, top, left + target_w, top + target_h))
 
 
@@ -203,7 +203,7 @@ def _render_body_page(img_path: str, text: str, page_no: int, px_w: int, px_h: i
     text_h = px_h - art_h
 
     art = Image.open(img_path).convert("RGB")
-    art_fitted = _fit_cover(art, px_w, art_h)
+    art_fitted = _fit_cover(art, px_w, art_h, vertical_focus=0.65)
     canvas.paste(art_fitted, (0, 0))
 
     draw = ImageDraw.Draw(canvas)
