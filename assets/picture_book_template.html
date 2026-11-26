@@ -98,8 +98,12 @@
   }
   .page .art img {
     width: 100%; height: 100%;
-    object-fit: cover; object-position: center;
+    object-fit: cover; object-position: center 65%;
     display: block;
+  }
+  .page.cover .art img,
+  .page.back .art img {
+    object-position: center 50%;
   }
   .page .text {
     padding: 18px 28px 16px;

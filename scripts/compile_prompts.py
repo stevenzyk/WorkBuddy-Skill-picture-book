@@ -226,12 +226,24 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
     if not scenes:
         errors.append("scenes 不能为空，至少需定义 1 个场景锚点")
 
+    LIGHTING_CUES = {
+        "morning": ("morning", "dawn", "sunrise", "daylight", "light", "sun"),
+        "day": ("daylight", "sunlit", "sunny", "afternoon", "bright", "light"),
+        "sunset": ("sunset", "dusk", "golden hour", "evening", "twilight", "late-afternoon", "afterglow"),
+        "night": ("night", "star", "moon", "dark", "firelight", "campfire", "warm indoor", "lamp"),
+    }
     for sc_id, sc_info in scenes.items():
         tod = (sc_info.get("time_of_day") or "").strip().lower()
         if tod not in TIME_OF_DAY_ORDER:
             errors.append(
                 f"场景 '{sc_id}' 缺少有效的必填字段 time_of_day（可选：morning / day / sunset / night），用于防时间线倒流"
             )
+        else:
+            anc_low = (sc_info.get("anchor_en") or "").lower()
+            if anc_low and not any(cue in anc_low for cue in LIGHTING_CUES[tod]):
+                errors.append(
+                    f"场景 '{sc_id}' 的 time_of_day='{tod}'，但 anchor_en 中未包含对应的光线/时段词（如 {', '.join(LIGHTING_CUES[tod][:3])}），请内嵌光线词以防整段场景光照漂移！"
+                )
 
     if len(looks) > 3:
         warnings.append(f"当前定义了 {len(looks)} 套造型（建议 ≤ 3 套，单页赤脚/戴帽等微调优先用页级 outfit_overrides_en）")
