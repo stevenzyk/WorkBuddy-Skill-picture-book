@@ -46,7 +46,7 @@ Examples below are generated from a real 20-page family storybook (*Starlight Re
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.4.0): 4-step workflow & CLI triggers
+├── SKILL.md                           # Core skill entry (WorkBuddy spec, v2.5.0): 4-step workflow & CLI triggers
 ├── assets/
 │   └── picture_book_template.html     # Interactive HTML e-book template (single-page flip, double spread, scroll & print)
 ├── docs/
@@ -55,12 +55,12 @@ workbuddy-skill-picture-book/
 │       └── demo_consistency.jpg
 ├── references/
 │   ├── story_prompts.md               # Literary gold standards, 3 tone choices, 4 Story Blueprints & story_plan.json schema
-│   ├── consistency_rules.md           # Identity + Look decoupling, barefoot overrides, prop scale & monotonic timeline rules
-│   └── qa_checklist.md                # Literary anti-alt-text check & 5-question fact-answer QA checklist
+│   ├── consistency_rules.md           # Identity + Look decoupling, location anchors, indoor/outdoor physics & anti-lineup rules
+│   └── qa_checklist.md                # Literary anti-alt-text check & 6-question fact-answer QA checklist
 ├── scripts/
 │   ├── compile_prompts.py             # story_plan.json validator + zero-loss prompt compiler + book.json generator
 │   ├── build_book.py                  # One-command book.json validator + HTML & printable PDF builder
-│   └── build_pdf.py                   # Pillow-based full-text printable PDF builder (backwards-compatible dir mode)
+│   └── build_pdf.py                   # Pillow-based printable PDF builder with CJK kinsoku & anti-orphan line wrapping
 ├── LICENSE                            # Apache License 2.0
 ├── README.md                          # Chinese README
 └── README.en.md                       # English README
@@ -100,15 +100,15 @@ workbuddy-skill-picture-book/
 
 The skill follows a strict four-step closed loop balancing literary warmth and cross-model determinism:
 
-1. **Photo Pre-Check & Creative Specifications (with 3 Literary Tone Options)**
-   - Evaluate uploaded photos for clarity, angle, and headcount (1–4 characters work best) and confirm **illustration style, book size, page count**, and **literary tone** (*Playful Rhythm* / *Curious Treasure-Hunt* / *Warm Poetic Keepsake*).
+1. **Photo Pre-Check & Creative Specifications (with Age-Guided Literary Tone Options)**
+   - Evaluate uploaded photos for clarity, angle, and headcount (1–4 characters work best) and confirm **illustration style, book size, page count**, and **literary tone** (*Playful Rhythm* ages 2–5 / *Curious Treasure-Hunt* ages 5–10 / *Warm Poetic Keepsake* all-ages & adult families).
 2. **[Checkpoint 1] Combined Profile, Look & Literary Script Confirmation → `compile_prompts.py`**
-   - Craft a unifying `story_thread` and evocative, non-alt-text `text_zh` captions anchored to each page's single `event_core`, then confirm **objective character profiles + outfit `Looks` (plus per-page `outfit_overrides_en`) + captions** in a single user checkpoint.
-   - Write `story_plan.json` and run `scripts/compile_prompts.py` to synthesize bias-free adult tags, auto-strip footwear on `barefoot` pages, enforce `prop_states_en` placement and monotonic `(day, time_of_day)` timelines, match cover vs. body aspect ratios, and output `prompts_manifest.md` + `book.json`.
+   - Craft a unifying `story_thread` and evocative, non-alt-text `text_zh` captions anchored to each page's single `event_core` with strict indoor/outdoor physical common sense, then confirm **objective character profiles + outfit `Looks` (plus per-page `outfit_overrides_en`) + captions** in a single user checkpoint.
+   - Write `story_plan.json` and run `scripts/compile_prompts.py` to synthesize bias-free adult tags, verify `location_group` architectural continuity, block indoor airborne prop violations, inject anti-lineup staging, enforce `prop_states_en` placement and monotonic `(day, time_of_day)` timelines, match cover vs. body aspect ratios with 15% bottom floor margin, and output `prompts_manifest.md` + `book.json`.
 3. **[Checkpoint 2] Approve Standing Look Sheets + Sample Pages → Batch Generation**
-   - Generate full-body standing `Look` reference sheets + element sheets + **cover & Page 1 samples** for user sign-off, then generate remaining pages in batches of 2–3 with 5-question fact-answer QA.
+   - Generate full-body standing `Look` reference sheets + element sheets + **cover & Page 1 samples** for user sign-off, then generate remaining pages in batches of 2–3 with 6-question fact-answer QA.
 4. **Automated Validation, Dual Export & Single-Page Revisions**
-   - Run `scripts/build_book.py` to validate and export both the interactive HTML e-book and full-text printable PDF (with optional `--crop-watermark` & `--bleed`). Supports targeted single-page redraws and one-command repackaging.
+   - Run `scripts/build_book.py` to validate and export both the interactive HTML e-book and CJK-kinsoku printable PDF (with optional `--crop-watermark` & `--bleed`). Supports targeted single-page redraws and one-command repackaging.
 
 ---
 

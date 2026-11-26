@@ -13,7 +13,7 @@ examples_en:
   - "Turn this child photo into an 8-inch square, 12-page forest adventure picture book in soft watercolor style"
   - "Create a printable 16-page landscape 12-inch family beach storybook with warm poetic captions"
   - "Expand my story outline with this family photo into a printable four-seasons storybook PDF"
-version: 2.4.0
+version: 2.5.0
 author: Steven的能量场
 agent_created: true
 ---
@@ -54,20 +54,22 @@ agent_created: true
 
 > **执行本步前，务必先读取本技能目录下的两份参考文件**：
 > - `@references/story_prompts.md`（绘本文学「1 锚定 + 2 禁止 + 1 增味」金标准、正反对比范例与 `story_plan.json` 模板）
-> - `@references/consistency_rules.md`（角色本体与 `Look` 解耦、页级赤脚覆盖、随身小道具防巨型贴图、时间线规范）
+> - `@references/consistency_rules.md`（角色本体与 `Look` 解耦、空间陈设锚定、室内外物理常识、防排排站构图与时间线规范）
 
-1. **创作绘本文案铁律（「事件同源、繁简分流」，严禁写成监控画面说明书）**：
+1. **创作绘本文案与分镜铁律（「事件同源、繁简分流 + 严守生活物理常识」）**：
    - 先定一句话全书串珠线 `story_thread` 与每页唯一瞬间事件 `event_core`。
-   - **英文描述写满细节，中文 `text_zh` 提纯文学感**：锚定本页正在发生的同一动作（防图文错位），**严禁把“红白格子/藤编/奶油白”等生图参数抄进中文台词**，禁止连续两页用 `XX 做了 YY` 汇报句，每页融入**拟声/环境声、角色短对话、触觉温度或温柔比喻**。
+   - **严守室内外物理常识与因果顺序**：风筝、雨伞、帐篷、单车等户外道具在室内（`environment: "indoor"`）必须处于平放桌面/拿在手中/挂在墙面等收纳准备态（设 `outdoor_active_only: true`），**严禁在室内放风筝升空**！居家上床/睡前页须通过 `outfit_overrides_en` 脱去户外鞋或换居家拖鞋；文字写“关灯/灯暗”则画面仅留微弱夜灯或月光。
+   - **同一空间防“换装修” + 打破“全书一字排开罚站”**：同一客厅/同一片草地跨时段出现时，设置相同的 `location_group` 并原样复用窗框、窗帘、沙发或树木锚点词（只改光线）；多人同框页须交替采用围坐半圆、前后景错落、行走互动等自然队形，**严禁每页照抄基准图的从左到右排排站**。
+   - **英文描述写满细节，中文 `text_zh` 提纯文学感**：锚定本页正在发生的同一动作（防图文错位），**严禁把“红白格子/藤编/奶油白”等生图参数抄进中文台词**，禁止连续两页用 `XX 做了 YY` 汇报句；成年家庭慎用生硬旁白点名“儿子/女儿”，优先用亲切昵称或“我们/姐姐/弟弟”。
 2. **一次性向用户展示以下 3 项并请用户确认（合并提问，避免零碎打扰）**：
    - **① 人物客观档案卡**：每人称呼、**具体数字年龄**、性别、相对身高关系。
-   - **② 造型服装方案（`Looks` 1–3 套 + 单页微调）**：跨季/变装拆独立 `Look`；单页涉水赤脚、戴帽等直接用页级 `outfit_overrides_en`（含 `barefoot` 自动剥离鞋袜，防穿鞋踩浪）。
+   - **② 造型服装方案（`Looks` 1–3 套 + 单页微调）**：跨季/变装拆独立 `Look`；单页涉水赤脚、居家脱鞋等直接用页级 `outfit_overrides_en`（含 `barefoot` 自动剥离鞋袜）。
    - **③ 全书串珠线与逐页绘本文案**。
 3. **用户确认后，写入 `story_plan.json` 并运行编译器（严禁手写散装长 Prompt）**：
    ```bash
    python <SKILL_DIR>/scripts/compile_prompts.py --plan ./book/story_plan.json
    ```
-   - 编译器自动完成：合成客观年龄主语（拦截 `son/daughter` 防成人缩水）、校验在场角色无漏人、核验 `caption_nouns_en` 100% 进图、强制在场道具填写 `prop_states_en` 位置（随身小件标 `is_small_accessory: true` 防角落巨型相机）、拦截同一天内 `(day, time_of_day)` 时间倒流，并按封面/正文实际画框分别匹配画幅（方形绘本封面 `1:1`、正文 `4:3` 横画幅防切脚尖）。
+   - 编译器自动完成：合成客观年龄主语（拦截 `son/daughter` 防成人缩水）、校验同一 `location_group` 空间陈设词一致、拦截室内场景户外升空违和词、校验在场角色无漏人且注入防排排站错落构图、核验 `caption_nouns_en` 100% 进图、拦截 `(day, time_of_day)` 时间倒流，并按画框匹配画幅与底部 15% 地面防切脚留白。
    - 如有报错按终端提示修正直至输出 `✅ 编译通过`，自动生成 **`prompts_manifest.md`** 与 **`book.json`**。
 
 ---
@@ -78,9 +80,9 @@ agent_created: true
 
 1. **阶段 3A：生成全套基准图 + 2 页样张，交给用户做第 2 次确认**：
    - 按清单依次生成：**全部 `Look` 平地自然站姿全身基准图**（第 2 套起传第 1 套站姿图作 `image1` 链式锁脸锁身高）+ 道具/配角基准图 + **封面 `page_01_cover.png` + 正文第 1 页 `page_02.png`**。
-   - 用 `present_files` 展示给用户确认长相、身高比例、换装效果与构图留白，点头后再批量生成剩余正页。
-2. **阶段 3B：小批生成剩余页面（每次 2–3 页）+ 5 题事实反问审图**：
-   - 每生成 2–3 页立即用 `ViewImage` 逐页回答 `@references/qa_checklist.md` 关口 3 的 **5 个事实问题**（人数身高、视线互动与脚部留白、图文元素、衣鞋/赤脚状态、道具比例与肢体），任一异常**当场重生成**。
+   - 先自检无切脚、无室内物理穿帮后，用 `present_files` 展示给用户确认，点头后再批量生成剩余正页。
+2. **阶段 3B：小批生成剩余页面（每次 2–3 页）+ 6 题事实反问审图**：
+   - 每生成 2–3 页立即用 `ViewImage` 逐页回答 `@references/qa_checklist.md` 关口 3 的 **6 个事实问题**（人数身高、队形变化与脚底留白、背景装修连贯与室内外物理常识、图文与液体/连线物理闭合、衣鞋状态、道具比例与肢体），任一异常**当场重生成**。
 
 ---
 

@@ -58,10 +58,11 @@
 在用户完成**【检查点 1】确认「人物客观档案卡 + 造型服装方案 + 故事串珠线与分页文案」**后，写入 `story_plan.json` 并运行 `compile_prompts.py`。
 
 > **关键规则**：
-> 1. 角色用代号（`c1`, `c2`...），填写真实数字 `age` 与 `gender`（`male` / `female`）。编译器自动合成 `the 24-year-old adult man` 等客观标签，**严禁在任何英文字段对成年人写 `son / daughter / boy / girl`**。
-> 2. 随身小配件（如掌心相机、钥匙、贝壳）设 `"is_small_accessory": true`：远景全身页仅靠文字约束尺寸，仅在将该道具列入本页 `"focus_props": ["camera"]` 特写时才传入 `1:1` 道具参考图，彻底防止画面角落冒出“巨型相机”。
-> 3. 凡某页启用了 `present_props`，**必填** `prop_states_en` 交代具体挂载/持握/放置位置；单页赤脚踩水只需填 `"outfit_overrides_en": {"c1": "barefoot with rolled-up jeans, no shoes"}`，编译器会自动剥离原服装串里的鞋袜词。
-> 4. `scenes` 必填 `time_of_day`（`morning < day < sunset < night`）。同一天内时间倒流会被硬拦截；进入第二天或下一季节时，在该起始页填 `"day": 2`（后续页自动延续）；梦境/回忆闪回页可填 `"allow_flashback": true`。
+> 1. 角色用代号（`c1`, `c2`...），填写真实数字 `age` 与 `gender`（`male` / `female`）。编译器自动合成 `the 24-year-old adult man` 等客观标签，**严禁在任何英文字段对成年人写 `son / daughter / boy / girl`**；中文 `text_zh` 对成年儿女也避免生硬旁白点名“儿子/女儿”，优先用亲切昵称或“我们/姐姐/弟弟”。
+> 2. 随身小配件（如掌心相机、钥匙、贝壳）设 `"is_small_accessory": true`；**风筝、雨伞、帐篷、单车等户外激活道具设 `"outdoor_active_only": true`**——在室内场景中，`prop_states_en` **必须写明平放桌面/拿在手中/挂在墙面等收纳准备态，严禁在室内写升空飞翔（如在客厅放飞风筝会被编译器直接报错拦截）**！
+> 3. 凡某页启用了 `present_props`，**必填** `prop_states_en` 交代具体挂载/持握/放置位置；单页赤脚踩水、回家上床脱鞋只需填 `"outfit_overrides_en": {"c1": "barefoot, no shoes"}` 或 `"wearing cozy indoor slippers, NO outdoor sneakers"`。
+> 4. `scenes` 必填 `time_of_day`（`morning < day < sunset < night`）与 `environment`（`"indoor"` / `"outdoor"`）。**同一个家或同一片公园跨时段出现时，必填相同的 `"location_group"` 并原样复用同一套窗框材质、窗帘、沙发或标志性树林描述**（仅改光线），编译器会硬校验共享陈设词防中途换装修。
+> 5. **严禁全书照抄基准图“从左到右一字排开罚站”**：相邻多人页必须主动变换站位队形（如围坐野餐垫半圆、前后景奔跑呼应、侧身行走、聚拢看同一件物品）。
 
 ```json
 {
@@ -127,6 +128,7 @@
       "short_en": "cream-white vintage camera",
       "ref_image": "ref_prop_camera.png",
       "is_small_accessory": true,
+      "outdoor_active_only": false,
       "explicit_absence": true,
       "anchor_en": "one single small cream-white vintage compact camera with a round silver lens and a thin brown leather neck strap, smaller than an adult's palm"
     }
@@ -135,15 +137,21 @@
   "scenes": {
     "beach_morning": {
       "time_of_day": "morning",
-      "anchor_en": "a gentle sandy beach beside a clear turquoise sea with soft white foam waves, pale blue morning sky, soft morning daylight"
+      "environment": "outdoor",
+      "location_group": "family_beach",
+      "anchor_en": "a gentle golden sandy beach with distant coastal pine trees beside a clear turquoise sea with soft white foam waves, pale blue morning sky, soft morning daylight"
     },
     "beach_day": {
       "time_of_day": "day",
-      "anchor_en": "a sunlit golden sandy beach beside a calm blue sea under a clear sky with soft white clouds, bright warm daylight"
+      "environment": "outdoor",
+      "location_group": "family_beach",
+      "anchor_en": "the same golden sandy beach with distant coastal pine trees beside a calm turquoise sea with soft white foam waves, clear sky with soft white clouds, bright warm daylight"
     },
     "beach_sunset": {
       "time_of_day": "sunset",
-      "anchor_en": "the same sandy beach glowing under a warm golden-orange sunset sky, shimmering golden reflections on the sea"
+      "environment": "outdoor",
+      "location_group": "family_beach",
+      "anchor_en": "the same golden sandy beach with distant coastal pine trees beside the calm sea with soft foam waves, glowing under a warm golden-orange sunset sky"
     }
   },
   "cover": {
@@ -156,17 +164,17 @@
       "camera": "hanging neatly on {c1}'s chest from its thin brown leather neck strap, palm-sized against his shirt"
     },
     "character_actions": {
-      "c2": "standing on the left, smiling warmly",
-      "c1": "standing in the center-left beside {c2}, smiling warmly",
-      "c3": "standing in the center-right beside {c1}, smiling gently",
-      "c4": "standing on the right beside {c3}, grinning brightly"
+      "c2": "standing slightly in front on the left, smiling warmly",
+      "c1": "standing beside {c2} with one arm gently around her shoulder, smiling warmly",
+      "c3": "standing in a relaxed pose beside {c1}, smiling gently",
+      "c4": "standing on the right turned slightly inward toward the family, grinning brightly"
     },
     "shot_and_gaze_en": "medium-wide family portrait framing"
   },
   "pages": [
     {
       "image": "page_02.png",
-      "event_core": "姐姐举相机给家人拍海边合影",
+      "event_core": "姐姐半蹲在前景举相机给身后聚拢的家人拍海边合影",
       "scene_id": "beach_day",
       "look_id": "look_beach",
       "present_characters": ["c1", "c2", "c3", "c4"],
@@ -178,12 +186,12 @@
       "text_zh": "“一、二，看大海——咔嚓！”姐姐把海风吹乱的刘海和大家的笑声，一起锁进了小小的镜头里。",
       "caption_nouns_en": ["sea", "camera"],
       "character_actions": {
-        "c1": "standing on the left beside {c2}, smiling toward {c3}",
-        "c2": "standing in the middle-left leaning close to {c1}, laughing happily toward {c3}",
-        "c4": "standing in the middle-right beside {c2}, grinning toward {c3}",
-        "c3": "standing on the right turned slightly toward the others, raising {camera} to her eye with both hands to take their photo"
+        "c3": "crouching playfully in the right foreground in 3/4 back-side view, raising {camera} to her eye with both hands aimed at the family",
+        "c2": "standing in the center midground leaning close to {c1}, laughing happily toward {c3}'s lens",
+        "c1": "standing in the midground beside {c2} with a warm grin toward {c3}",
+        "c4": "leaning in cheerfully next to {c1} in the midground, making a joyful wave toward {c3}"
       },
-      "shot_and_gaze_en": "candid medium-full shot, lively natural interaction, NOT staring stiffly at the viewer"
+      "shot_and_gaze_en": "layered foreground-to-midground storybook framing, lively natural cluster rather than a flat horizontal row, NOT staring at the viewer"
     },
     {
       "image": "page_03.png",

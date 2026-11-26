@@ -76,6 +76,14 @@ TIME_OF_DAY_ORDER = {
 }
 
 VALID_LITERARY_TONES = {"rhythm", "curiosity", "poetic", "custom"}
+VALID_ENVIRONMENTS = {"indoor", "outdoor"}
+
+# 室内物理常识拦截：当场景为 indoor 时，道具状态严禁写成升空飞翔/放飞状态（如在客厅天花板下放飞风筝）
+INDOOR_AIRBORNE_PROP_RE = re.compile(
+    r"\b(flying|soaring|airborne|hovering|floating high|aloft|launched into the sky|in the sky|"
+    r"catching the wind|tugging at the string overhead|rising into the air)\b",
+    re.IGNORECASE,
+)
 
 # 封闭语法集合：英文家庭辈分词会强烈诱导生图模型将成年人画成幼童
 KINSHIP_BIAS_WORDS = re.compile(
@@ -232,6 +240,17 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         "sunset": ("sunset", "dusk", "golden hour", "evening", "twilight", "late-afternoon", "afterglow"),
         "night": ("night", "star", "moon", "dark", "firelight", "campfire", "warm indoor", "lamp"),
     }
+    INDOOR_HINT_RE = re.compile(
+        r"\b(living room|bedroom|kitchen|hallway|indoors|indoor|inside the house|sofa|couch|bedside|ceiling)\b",
+        re.IGNORECASE,
+    )
+    SCENE_STOPWORDS = {
+        "the", "and", "with", "under", "beside", "from", "into", "over", "near", "soft", "warm", "bright",
+        "gentle", "clear", "light", "daylight", "sunlit", "sunny", "morning", "afternoon", "sunset", "dusk",
+        "evening", "night", "dark", "sky", "clouds", "glowing", "golden", "same", "indoor", "outdoor",
+    }
+    location_groups: Dict[str, List[Tuple[str, set]]] = {}
+
     for sc_id, sc_info in scenes.items():
         tod = (sc_info.get("time_of_day") or "").strip().lower()
         if tod not in TIME_OF_DAY_ORDER:
@@ -244,6 +263,34 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
                 errors.append(
                     f"场景 '{sc_id}' 的 time_of_day='{tod}'，但 anchor_en 中未包含对应的光线/时段词（如 {', '.join(LIGHTING_CUES[tod][:3])}），请内嵌光线词以防整段场景光照漂移！"
                 )
+
+        env_raw = (sc_info.get("environment") or "").strip().lower()
+        if env_raw and env_raw not in VALID_ENVIRONMENTS:
+            errors.append(f"场景 '{sc_id}' 的 environment='{env_raw}' 无效（可选：indoor / outdoor）")
+        if not env_raw:
+            anc_text = sc_info.get("anchor_en") or ""
+            env_raw = "indoor" if INDOOR_HINT_RE.search(anc_text) else "outdoor"
+            sc_info["environment"] = env_raw
+
+        loc_grp = (sc_info.get("location_group") or "").strip()
+        if loc_grp:
+            words = {
+                w for w in re.findall(r"[a-z]{4,}", (sc_info.get("anchor_en") or "").lower())
+                if w not in SCENE_STOPWORDS
+            }
+            location_groups.setdefault(loc_grp, []).append((sc_id, words))
+
+    # 同一地点跨时段装修/地貌防突变校验（例如白天客厅 vs 夜晚客厅必须复用相同的窗框、窗帘、沙发锚点词）
+    for loc_grp, entries in location_groups.items():
+        if len(entries) >= 2:
+            base_id, base_words = entries[0]
+            for other_id, other_words in entries[1:]:
+                shared = base_words & other_words
+                if len(shared) < 3:
+                    errors.append(
+                        f"同一空间组 location_group='{loc_grp}' 下的场景 '{base_id}' 与 '{other_id}' 共享具象陈设/地貌词过少（仅 {sorted(shared)}）。"
+                        f"同一间屋子或同一片草地跨时段出现时，必须原样复用相同的窗框颜色、窗帘、沙发或标志性树木锚点词，仅修改窗外天色与灯光，严禁中途换装修！"
+                    )
 
     if len(looks) > 3:
         warnings.append(f"当前定义了 {len(looks)} 套造型（建议 ≤ 3 套，单页赤脚/戴帽等微调优先用页级 outfit_overrides_en）")
@@ -322,7 +369,8 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         ref_prompt = (
             f"{style_prefix}, character reference sheet showing {len(characters)} person(s) standing side by side "
             f"on a flat level floor in a relaxed natural full-body standing pose (head to toe including shoes/feet "
-            f"fully visible with comfortable margin below the feet, NOT sitting): {'; '.join(char_specs)}.{dist_str} "
+            f"fully visible with generous blank floor margin at the bottom 15% below the shoes, NOT sitting): "
+            f"{'; '.join(char_specs)}.{dist_str} "
             f"Keep recognizable facial features and exact relative height proportions, "
             f"clean plain warm cream background, no real photo background."
         )
@@ -406,12 +454,15 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         scene_id = (spec.get("scene_id") or "").strip()
         if scene_id and scene_id not in scenes:
             errors.append(f"{page_label} 引用了未定义的 scene_id：'{scene_id}'")
+        scene_info = scenes.get(scene_id, {})
         scene_anchor = _expand_placeholders(
-            (scenes.get(scene_id, {}).get("anchor_en") or spec.get("scene_override_en") or "").strip(),
+            (scene_info.get("anchor_en") or spec.get("scene_override_en") or "").strip(),
             token_map,
         )
         if not scene_anchor and img_name:
             errors.append(f"{page_label} 缺少有效的 scene_id 或 scene_override_en")
+
+        is_indoor_scene = (scene_info.get("environment") == "indoor") or bool(INDOOR_HINT_RE.search(scene_anchor))
 
         present_chars: List[str] = spec.get("present_characters") or []
         present_props: List[str] = spec.get("present_props") or []
@@ -468,6 +519,13 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
 
                 act = _expand_placeholders((char_actions.get(cid) or "").strip(), token_map)
                 check_bias_words(act, f"{page_label}.character_actions.{cid}", all_adults_here)
+                if is_indoor_scene:
+                    m_air = INDOOR_AIRBORNE_PROP_RE.search(act)
+                    if m_air and not spec.get("allow_indoor_flight", False):
+                        errors.append(
+                            f"室内物理常识拦截：{page_label} 处于室内场景（'{scene_id}'），但角色 {cid} 的动作包含户外升空/放飞描述 '{m_air.group(0)}'！"
+                            f"室内准备阶段请改为平铺桌面/抱在怀里/挂在墙上（若确属奇幻魔法设定请显式加 \"allow_indoor_flight\": true）。"
+                        )
                 char_segments.append(f"{char_identity_full[cid]} ({final_outfit}) is {act}")
 
             absent_chars = [subject_tags[c] for c in characters if c not in present_chars]
@@ -487,7 +545,7 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         else:
             char_segments.append("no human characters in this scene")
 
-        # 道具与配角片段 + 参考图策略（防随身小件在远景全身页被贴成巨型角落物体）
+        # 道具与配角片段 + 参考图策略（防随身小件在远景全身页被贴成巨型角落物体，防户外道具在室内自动飞上天花板）
         prop_segments: List[str] = []
         prop_states = spec.get("prop_states_en") or {}
         for pid in present_props:
@@ -496,16 +554,32 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
             pinfo = props[pid]
             p_anchor = _expand_placeholders(pinfo["anchor_en"], token_map)
             p_state = _expand_placeholders((prop_states.get(pid) or "").strip(), token_map)
+            is_outdoor_gear = bool(pinfo.get("outdoor_active_only", False))
             if not p_state:
                 errors.append(
                     f"{page_label} 在 present_props 中启用了道具 '{pid}'，必须在 prop_states_en.{pid} 中写明本页它的具体挂载/持握/放置位置（防孤立巨型道具贴图）！"
                 )
             check_bias_words(p_state, f"{page_label}.prop_states_en.{pid}", all_adults_here)
+            if is_indoor_scene and p_state:
+                m_air_prop = INDOOR_AIRBORNE_PROP_RE.search(p_state)
+                if m_air_prop and not spec.get("allow_indoor_flight", False):
+                    errors.append(
+                        f"室内物理常识拦截：{page_label} 处于室内场景（'{scene_id}'），但道具 '{pid}' 的状态写了 '{m_air_prop.group(0)}'（如在家里把风筝放飞到半空）！"
+                        f"室内请写明平放在桌面/沙发/地板、拿在手中或挂在墙面上。"
+                    )
+                if is_outdoor_gear and not spec.get("allow_indoor_flight", False):
+                    p_state = f"{p_state}, resting indoors and NOT flying or airborne under the ceiling"
             prop_segments.append(f"{p_anchor}" + (f" ({p_state})" if p_state else ""))
 
             pref = (pinfo.get("ref_image") or "").strip()
             is_small = bool(pinfo.get("is_small_accessory", False))
-            should_pass_ref = bool(pref) and (not is_small or pid in focus_props or not present_chars)
+            # 户外放飞类道具在室内准备/收纳页除非显式列入 focus_props，否则不强塞孤立道具参考图，避免触发模型“拉线升空”强先验
+            indoor_gear_suppressed = is_indoor_scene and is_outdoor_gear and (pid not in focus_props)
+            should_pass_ref = (
+                bool(pref)
+                and not indoor_gear_suppressed
+                and (not is_small or pid in focus_props or not present_chars)
+            )
             if should_pass_ref and pref not in ref_imgs and len(ref_imgs) < 3:
                 ref_imgs.append(pref)
 
@@ -533,18 +607,23 @@ def compile_plan(plan_path: Path, out_dir: Path) -> Tuple[Dict, Dict]:
         check_bias_words(gaze, f"{page_label}.shot_and_gaze_en", all_adults_here)
 
         margin_guard = (
-            "keep comfortable breathing room above heads and below feet/props so feet and foreground objects "
-            "are never cut off at the bottom border"
+            "pull the camera slightly back so full shoes/feet and foreground objects sit comfortably above the "
+            "bottom 15% of the frame with visible floor/ground margin underneath, NEVER cropping toes, shoes, or cups at the bottom edge"
+        )
+        anti_lineup_guard = (
+            "natural storybook staging with varied depth and organic group interaction (semi-circle, foreground/background layers, "
+            "walking or turning toward the shared activity)—do NOT copy the flat left-to-right standing lineup from the reference sheet"
         )
         if is_cover:
             cover_rule = (
-                "leave clear empty space at the top 28% of the image for the title text, "
-                f"main figures placed in the lower two-thirds of the frame, {margin_guard}"
+                "leave clear empty sky/background space at the top 28% of the image for the title text, "
+                f"warm natural family grouping in the middle-lower area, {margin_guard}"
             )
             gaze = f"{gaze}, {cover_rule}" if gaze else cover_rule
         elif not is_back and present_chars:
             default_gaze = "candid natural storybook moment, characters engaged in the scene action, NOT staring stiffly at the camera"
-            gaze = f"{gaze or default_gaze}, {margin_guard}"
+            staging = f", {anti_lineup_guard}" if len(present_chars) >= 2 else ""
+            gaze = f"{gaze or default_gaze}{staging}, {margin_guard}"
 
         parts = [
             style_prefix,

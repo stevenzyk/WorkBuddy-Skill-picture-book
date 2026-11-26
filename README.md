@@ -46,7 +46,7 @@
 
 ```text
 workbuddy-skill-picture-book/
-├── SKILL.md                           # 技能核心入口（WorkBuddy 规范，v2.4.0）：四步工作流与脚本调用
+├── SKILL.md                           # 技能核心入口（WorkBuddy 规范，v2.5.0）：四步工作流与脚本调用
 ├── assets/
 │   └── picture_book_template.html     # 可单页翻页 / 双页对开 / 滚动阅读与打印的 HTML 电子绘本模板
 ├── docs/
@@ -55,12 +55,12 @@ workbuddy-skill-picture-book/
 │       └── demo_consistency.jpg
 ├── references/
 │   ├── story_prompts.md               # 绘本文学创作金标准、3 种可选文风、4 套故事骨架与 story_plan.json 规范
-│   ├── consistency_rules.md           # 角色与 Look 解耦、页级赤脚覆盖、随身道具防巨型贴图与时间线细则
-│   └── qa_checklist.md                # 文学去说明书化自检与 5 题事实反问审图清单
+│   ├── consistency_rules.md           # 角色与 Look 解耦、空间装修锚定、室内外物理常识、防排排站与时间线细则
+│   └── qa_checklist.md                # 文学去说明书化自检与 6 题事实反问审图清单
 ├── scripts/
 │   ├── compile_prompts.py             # story_plan.json 校验器 + 零丢失 Prompt 编译器 + book.json 生成器
 │   ├── build_book.py                  # 一键校验 book.json 并生成可翻页 HTML + 图文 PDF
-│   └── build_pdf.py                   # 基于 Pillow 的打印级图文 PDF 合成脚本（兼容纯图片目录模式）
+│   └── build_pdf.py                   # 基于 Pillow 的打印级图文 PDF 合成脚本（内置中文避头点与防孤字排版）
 ├── LICENSE                            # Apache License 2.0 开源协议
 ├── README.md                          # 中文说明文档
 └── README.en.md                       # 英文说明文档
@@ -100,15 +100,15 @@ workbuddy-skill-picture-book/
 
 本技能严格按照以下四步闭环执行（兼顾绘本文学灵气与跨模型确定性）：
 
-1. **照片体检与确认创作规格（含 3 种绘本文风智能推荐）**
-   - 评估照片清晰度、角度与人数（1–4 人同框最稳），确认 **插画风格、绘本尺寸、页数（面数）** 以及 **绘本文风**（童趣韵律风 / 好奇寻宝风 / 温暖收集风）。
+1. **照片体检与确认创作规格（含 3 种带适用年龄段的绘本文风推荐）**
+   - 评估照片清晰度、角度与人数（1–4 人同框最稳），确认 **插画风格、绘本尺寸、页数（面数）** 以及 **绘本文风**（童趣韵律风 2–5 岁 / 好奇寻宝风 5–10 岁 / 温暖收集风全年龄亲子与成年家庭）。
 2. **【检查点 1】合并确认档案、造型与文学脚本 → `compile_prompts.py` 确定性编译**
-   - 采用**「事件同源、繁简分流」**法则编写全书串珠线 `story_thread` 与去说明书化的绘本文案 `text_zh`，一次性请用户确认 **人物客观档案卡 + 造型服装方案（`Looks` + 页级 `outfit_overrides_en` 微调）+ 逐页文案**。
-   - 写入 `story_plan.json` 并运行 `scripts/compile_prompts.py`：自动合成客观年龄主语、剥离赤脚页鞋袜词、强制校验道具挂载位置与单向时间线 `(day, time_of_day)`、按封面/正文画框匹配画幅，输出 `prompts_manifest.md` 与 `book.json`。
-3. **【检查点 2】先验站姿基准图 + 样张 → 小批生图与事实审图**
-   - 按清单生成各套 `Look` 平地站姿全身基准图 + 要素基准图 + **封面与首张样张**请用户确认，随后每次 2–3 页小批生成并逐页执行 5 题事实审图。
+   - 采用**「事件同源、繁简分流 + 严守室内外物理常识」**法则编写全书串珠线 `story_thread` 与去说明书化的绘本文案 `text_zh`，一次性请用户确认 **人物客观档案卡 + 造型服装方案（`Looks` + 页级 `outfit_overrides_en` 微调）+ 逐页文案**。
+   - 写入 `story_plan.json` 并运行 `scripts/compile_prompts.py`：自动合成客观年龄主语、校验同一 `location_group` 空间装修一致、拦截室内户外道具升空违和词、注入多人防排排站错落构图、强制校验道具位置与单向时间线 `(day, time_of_day)`、按封面/正文画框匹配画幅与底部 15% 地面留白，输出 `prompts_manifest.md` 与 `book.json`。
+3. **【检查点 2】先验站姿基准图 + 样张 → 小批生图与 6 题事实审图**
+   - 按清单生成各套 `Look` 平地站姿全身基准图 + 要素基准图 + **封面与首张样张**请用户确认，随后每次 2–3 页小批生成并逐页执行 6 题事实审图。
 4. **自动化校验、双格式交付与单页精修**
-   - 运行 `scripts/build_book.py` 硬校验并一键输出可翻页 HTML 电子绘本与含完整图文排版的打印级 PDF（支持 `--crop-watermark` 与 `--bleed`）；支持按页码单页重画并一键重打包。
+   - 运行 `scripts/build_book.py` 硬校验并一键输出可翻页 HTML 电子绘本与含中文避头点防孤字排版的打印级 PDF（支持 `--crop-watermark` 与 `--bleed`）；支持按页码单页重画并一键重打包。
 
 ---
 

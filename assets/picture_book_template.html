@@ -98,10 +98,12 @@
   }
   .page .art img {
     width: 100%; height: 100%;
-    object-fit: cover; object-position: center 65%;
+    object-fit: cover; object-position: center 80%;
     display: block;
   }
-  .page.cover .art img,
+  .page.cover .art img {
+    object-position: center 72%;
+  }
   .page.back .art img {
     object-position: center 50%;
   }
@@ -110,6 +112,7 @@
     font-family: var(--font-body);
     font-size: 18px; line-height: 1.8; color: var(--text);
     text-align: center; background: var(--page-bg);
+    text-wrap: pretty; line-break: strict;
     flex-shrink: 0;
   }
   .page .text .page-no {

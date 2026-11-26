@@ -117,24 +117,70 @@ def _fit_contain(img, target_w: int, target_h: int, bg_color="white"):
     return canvas
 
 
+# 中文排版行首禁则（避头点）与行尾禁则（避尾点）字符集
+CJK_NO_LINE_START = set("。，、！？；：”’）》】〉」』〕…—·.,!?;:)]}%~")
+CJK_NO_LINE_END = set("“‘（《【〈「『〔([{#")
+
+
 def _wrap_text(draw, text: str, font, max_width: int) -> List[str]:
-    """按像素宽度自动换行（兼容中英文混排与显式换行符）。"""
+    """按像素宽度自动换行，内置中文标点避头/避尾禁则与末行孤字平衡（杜绝单独句号或单字占一行）。"""
+    def text_w(s: str) -> int:
+        if not s:
+            return 0
+        bbox = draw.textbbox((0, 0), s, font=font)
+        return bbox[2] - bbox[0]
+
+    # 允许避头标点轻微外挂（最多放宽 7% 行宽），放不下时则连同前字一起折入下一行
+    hang_limit = int(max_width * 1.07)
     lines: List[str] = []
+
     for paragraph in text.replace("\r\n", "\n").split("\n"):
         if not paragraph:
             lines.append("")
             continue
+
+        para_lines: List[str] = []
         current = ""
         for ch in paragraph:
             test = current + ch
-            bbox = draw.textbbox((0, 0), test, font=font)
-            if bbox[2] - bbox[0] <= max_width or not current:
+            w = text_w(test)
+            if w <= max_width or not current:
+                current = test
+            elif ch in CJK_NO_LINE_START and w <= hang_limit:
+                # 避头标点紧贴行尾，不单掉下一行
                 current = test
             else:
-                lines.append(current)
-                current = ch
+                # 若当前行末尾是左引号/左括号等避尾标点，将其移到下一行开头
+                if len(current) > 1 and current[-1] in CJK_NO_LINE_END:
+                    moved = current[-1]
+                    para_lines.append(current[:-1])
+                    current = moved + ch
+                elif ch in CJK_NO_LINE_START and len(current) > 1:
+                    # 连同前一个字符一起带入下一行，杜绝标点站行首
+                    moved = current[-1]
+                    para_lines.append(current[:-1])
+                    current = moved + ch
+                else:
+                    para_lines.append(current)
+                    current = ch
         if current:
-            lines.append(current)
+            para_lines.append(current)
+
+        # 末行孤字平衡：若最后一行只有 1~2 个字符（如“。”或“甜。”），从上一行匀 1~2 个字下来
+        if len(para_lines) >= 2 and len(para_lines[-1]) <= 2 and len(para_lines[-2]) >= 6:
+            prev_line = para_lines[-2]
+            last_line = para_lines[-1]
+            shift = 2 if len(last_line) == 1 else 1
+            while shift < len(prev_line) - 2 and prev_line[-shift] in CJK_NO_LINE_START:
+                shift += 1
+            while shift > 1 and prev_line[-shift - 1] in CJK_NO_LINE_END:
+                shift += 1
+            candidate_last = prev_line[-shift:] + last_line
+            if text_w(candidate_last) <= max_width:
+                para_lines[-2] = prev_line[:-shift]
+                para_lines[-1] = candidate_last
+
+        lines.extend(para_lines)
     return lines
 
 
@@ -155,7 +201,7 @@ def _create_warm_gradient(w: int, h: int):
 def _render_cover_page(img_path: str, title: str, subtitle: str, px_w: int, px_h: int):
     Image, ImageDraw, _ = _load_pil()
     art = Image.open(img_path).convert("RGB")
-    canvas = _fit_cover(art, px_w, px_h).convert("RGBA")
+    canvas = _fit_cover(art, px_w, px_h, vertical_focus=0.72).convert("RGBA")
 
     # 顶部柔和渐变遮罩，保证标题清晰可读且不遮挡下方人物
     scrim_h = int(px_h * 0.42)
@@ -203,7 +249,7 @@ def _render_body_page(img_path: str, text: str, page_no: int, px_w: int, px_h: i
     text_h = px_h - art_h
 
     art = Image.open(img_path).convert("RGB")
-    art_fitted = _fit_cover(art, px_w, art_h, vertical_focus=0.65)
+    art_fitted = _fit_cover(art, px_w, art_h, vertical_focus=0.80)
     canvas.paste(art_fitted, (0, 0))
 
     draw = ImageDraw.Draw(canvas)
